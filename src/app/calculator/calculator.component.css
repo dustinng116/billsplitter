@@ -1,0 +1,58 @@
+.example-first-footer-row {
+  font-weight: bold;
+}
+
+.example-section {
+  display: flex;
+  align-content: center;
+  align-items: center;
+  height: 60px;
+}
+
+.example-container {
+  max-height: 30rem;
+  overflow: auto;
+  width: 100%;
+}
+
+.sticky-row {
+  position: sticky;
+  top: 0;
+  background: white;
+  z-index: 1;
+}
+
+.btnPrimary {
+  background-color: rgb(0 81 149 / 84%) !important;
+}
+
+.select-group {
+  font-size: 0.85rem !important;
+  padding: .475rem 2.25rem .475rem .75rem !important;
+}
+
+label {
+  margin: 0 !important;
+}
+
+
+.tableGroup {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.tableGroup>th,
+td {
+  border: 1px solid rgb(109, 109, 109);
+  padding: 8px;
+  text-align: center;
+}
+
+.theadTableGroup {
+  background-color: #f0f0f0;
+  text-align: center;
+}
+
+.btnPrimary {
+  background-color: rgb(0 81 149 / 84%) !important;
+}

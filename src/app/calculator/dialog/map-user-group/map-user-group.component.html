@@ -1,0 +1,33 @@
+<h2 mat-dialog-title>Danh sách người tham gia theo từng hóa đơn</h2>
+<mat-dialog-content class="mat-typography">
+  <div class="mat-elevation-z8">
+
+    <table class="tableGroup ">
+      <thead class="theadTableGroup">
+        <tr>
+          <th>Name</th>
+          @for(header of rows[0].groups; track header){
+          <th>{{ header.groupName }}</th>
+          }
+        </tr>
+      </thead>
+      <tbody>
+        @for(row of rows; track row){
+        <tr>
+          <td>{{ row.name }}</td>
+          @for(group of row.groups; track group){
+          <td>
+            <input type="checkbox" [(checked)]="group.isChecked" (change)="toggleCheckbox(row, group)">
+          </td>
+          }
+        </tr>
+        }
+      </tbody>
+    </table>
+
+  </div>
+</mat-dialog-content>
+<mat-dialog-actions align="end">
+  <button mat-button mat-dialog-close>Hủy</button>
+  <button mat-flat-button type="button" class="m-1 btnPrimary" color="primary" [mat-dialog-close]="rows">Lưu</button>
+</mat-dialog-actions>

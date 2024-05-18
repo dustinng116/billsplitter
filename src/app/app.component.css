@@ -1,0 +1,8 @@
+.navbar-toggler:focus {
+  box-shadow: unset;
+}
+
+.btnPrimary {
+  background-color: rgb(0 81 149 / 84%) !important;
+  box-shadow: 0 5px 20px 0px rgba(0, 0, 0, 0.2), 0 13px 24px -11px rgb(18 67 136 / 60%) !important;
+}

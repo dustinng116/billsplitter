@@ -1,0 +1,33 @@
+{
+  "companyName": "Nexus Innovation",
+  "appName": "Chia Nào",
+  "sloganApp": "Công cụ giúp mọi cuộc đi chơi trở nên dễ dàng hơn",
+  "people": "người",
+  "group": {
+    "title": "Thêm nhóm chia nào!",
+    "groupName": "Tên nhóm",
+    "amount": "Số người",
+    "btnAddGroup": "Thêm nhóm",
+    "btnAddMember" : "Thêm người"
+  },
+  "bills": {
+    "title": "Danh sách Chi phí",
+    "btnAddBill": "Thêm bữa ăn/kèo",
+    "nameOfBill": "Bữa ăn/kèo/đi chợ....",
+    "cashOfBill": "Tiền hóa đơn",
+    "chooseGroup": "Chọn Nhóm",
+    "btnSplit": "Chia tiền",
+    "btnRemoveTable": "Xóa bảng"
+  },
+  "tableSplitter": {
+    "title": "Bảng chi phí chi tiết",
+    "name": "Tên hóa đơn",
+    "total": "Tổng",
+    "avgTotal": "Chia đều mỗi người"
+  },
+  "noti": {
+    "addGroupSuccess": "Thêm nhóm thành công!",
+    "errorInputGroup" : "Vui lòng kiểm tra lại thông tin!",
+    "duplicateGroup" : "Nhóm trùng tên, vui lòng chọn tên khác!"
+  }
+}

@@ -1,0 +1,24 @@
+.tableGroup {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.tableGroup>th,
+td {
+  border: 1px solid rgb(189 173 173);
+  border-top: 0;
+  padding: 8px;
+  text-align: center;
+}
+.theadTableGroup > th { 
+  border-right: 1px solid rgb(189 173 173) !important;
+}
+
+.theadTableGroup {
+  background-color: #f0f0f0;
+  text-align: center;
+}
+
+.btnPrimary {
+  background-color: rgb(0 81 149 / 84%) !important;
+}

@@ -1,1 +1,30 @@
 /* You can add global styles to this file, and also import other style files */
+
+@import '../node_modules/bootstrap/dist/css/bootstrap.min.css';
+
+/* // regular style toast */
+@import 'ngx-toastr/toastr';
+/* @import 'ngx-toastr/toastr-bs5-alert'; */
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: Roboto, "Helvetica Neue", sans-serif;
+}
+
+.collapse:not(.show) {
+  display: unset !important;
+}
+
+.navbar-toggler {
+  padding: 0.25rem 0.75rem !important;
+  font-size: 1.25rem !important;
+  line-height: 1 !important;
+  background-color: transparent !important;
+  border: 1px solid transparent !important;
+  border-radius: 0.25rem !important;
+}
