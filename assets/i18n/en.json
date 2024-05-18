@@ -1,0 +1,32 @@
+{
+  "companyName": "Nexus Innovation",
+  "appName": "Share Bill",
+  "sloganApp": "Splitting bill tools that make the joys to be easier",
+  "people": "people",
+  "group": {
+    "title": "Let's add joy group!",
+    "groupName": "Group name",
+    "amount": "Group amount",
+    "btnAddGroup": "Add Group"
+  },
+  "bills": {
+    "title": "List of Bills",
+    "btnAddBill": "Add more joys/bills",
+    "nameOfBill": "Meals/joys/bill.....",
+    "cashOfBill": "Cash of Bill",
+    "chooseGroup": "Choose group",
+    "btnSplit": "Split bills",
+    "btnRemoveTable": "Clear table"
+  },
+  "tableSplitter": {
+    "title": "Bills details",
+    "name": "Bill name",
+    "total": "Total",
+    "avgTotal": "Cash/person"
+  },
+  "noti": {
+    "addGroupSuccess": "Add group successfully!",
+    "errorInputGroup" : "Please re-check about the input group information!",
+    "duplicateGroup" : "Duplicate in group name, please choose another name!"
+  }
+}
