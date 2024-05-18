@@ -37,8 +37,7 @@ import { group } from '@angular/animations';
     MatSelectModule,
     MatSnackBarModule,
     MatCheckboxModule,
-    MatDialogModule,
-    CurrencyInputDirective,
+    MatDialogModule, 
     TranslateModule,
   ],
   templateUrl: './calculator.component.html',
@@ -64,6 +63,7 @@ export class CalculatorComponent {
   isAddListMember = false;
   listMember: string[] = [];
   matrixMemberAndGroup: any[] = [];
+  placeHolderListMember: string = `Ex: John, Will, Alex, Jessica\n or\nJohn\nWill\nAlex\nJessica`;
   @ViewChild('typeInput') typeInput: any;
   @ViewChild('amountInput') amountInput: any;
 
@@ -72,8 +72,7 @@ export class CalculatorComponent {
     private snackBar: MatSnackBar,
     private toastr: ToastrService,
     private translateService: TranslateService,
-    public dialog: MatDialog,
-    private cdRef: ChangeDetectorRef
+    public dialog: MatDialog
   ) {
     this.form = this.fb.group({
       listMember: this.fb.control(''),
@@ -136,7 +135,14 @@ export class CalculatorComponent {
     this.isAddListMember = !this.isAddListMember;
   }
   mapUserWithBill(): void {
-    if (!this.form.get('listMember')?.value) return;
+    if (!this.form.get('listMember')?.value) {
+      this.translateService.get('noti.textareaEmpty').subscribe((msg) => {
+        this.toastr.warning(msg, undefined, {
+          positionClass: 'toast-bottom-right',
+        });
+      });
+      return;
+    }
     const lines = this.form.get('listMember')?.value.split('\n');
     let matrixMemberAndGroup: any = [];
     this.listMember = lines;
@@ -271,6 +277,7 @@ export class CalculatorComponent {
     this.submittedData = [];
     this.generatedHeader = [];
     this.finalHeader = [];
+    this.matrixMemberAndGroup = [];
   }
   convertVNToCamelNotation(nameOfGroup: string): string {
     return nameOfGroup
@@ -318,10 +325,10 @@ export class CalculatorComponent {
     return Math.round(this.getTotalValue(index) / numberOfMember);
   }
 
-  getTotalValuePerMember(row: any) { 
+  getTotalValuePerMember(row: any) {
     let total = row.value;
     row.groups.forEach((ele: any, index: number) => {
-      if(ele.isChecked){
+      if (ele.isChecked) {
         total += this.getAvgInGroup(index);
       }
     });

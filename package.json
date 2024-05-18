@@ -7,7 +7,8 @@
     "build": "ng build",
     "watch": "ng build --watch --configuration development",
     "test": "ng test",
-    "deploy" : "ng build --base-href 'https://dustinng116.github.io/billsplitter/' && ng deploy --base-href 'https://dustinng116.github.io/billsplitter/'"
+    "ghdeploy" : "ng deploy --base-href 'https://dustinng116.github.io/billsplitter/'",
+    "ghbuild" : "ng build --base-href 'https://dustinng116.github.io/billsplitter/' "
   },
   "private": true,
   "dependencies": {

@@ -33,16 +33,7 @@
 /*global require:false */
 /*global jQuery:false */
 /*global moment:false */
-
-/*
-
-
-     Creative Tim Modifications
-
-     We added class btn-primary for custom styling button.
-
-
-*/
+ 
 
 ! function(e) {
   "use strict";

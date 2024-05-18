@@ -3,12 +3,23 @@
   "appName": "Chia Nào",
   "sloganApp": "Công cụ giúp mọi cuộc đi chơi trở nên dễ dàng hơn",
   "people": "người",
+  "addCbkMember": "Thêm thành viên vào nhóm",
+  "name": "Tên",
+  "button": {
+    "cancel": "Hủy",
+    "save": "Lưu"
+  },
   "group": {
     "title": "Thêm nhóm chia nào!",
     "groupName": "Tên nhóm",
     "amount": "Số người",
     "btnAddGroup": "Thêm nhóm",
-    "btnAddMember" : "Thêm người"
+    "titleTableName": "Tên nhóm",
+    "titleTableAmount": "Số lượng(người)"
+  },
+  "listMember": {
+    "title": "Danh sách thành viên",
+    "btnMember": "Chi tiết từng người"
   },
   "bills": {
     "title": "Danh sách Chi phí",
@@ -25,9 +36,19 @@
     "total": "Tổng",
     "avgTotal": "Chia đều mỗi người"
   },
+  "dialog": {
+    "title": "Danh sách người tham gia theo từng hóa đơn"
+  },
+  "tableMemberDetail": {
+    "name": "Tên",
+    "totalBill": "Tổng/người",
+    "textTable": "Bảng chi phí cá nhân"
+  },
   "noti": {
     "addGroupSuccess": "Thêm nhóm thành công!",
-    "errorInputGroup" : "Vui lòng kiểm tra lại thông tin!",
-    "duplicateGroup" : "Nhóm trùng tên, vui lòng chọn tên khác!"
+    "errorInputGroup": "Vui lòng kiểm tra lại thông tin!",
+    "duplicateGroup": "Nhóm trùng tên, vui lòng chọn tên khác!",
+    "textareaEmpty": "Không có thành viên trong danh sách thêm!",
+    "errorListMemberDetailEmpty": "Vui lòng chỉnh bảng chi tiết nhóm để hiển thị "
   }
 }

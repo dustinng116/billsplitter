@@ -9,6 +9,7 @@ import {
   MatDialogRef,
   MatDialogTitle,
 } from '@angular/material/dialog';
+import { TranslateModule } from '@ngx-translate/core';
 
 interface CheckboxGroup {
   groupName: string;
@@ -28,7 +29,8 @@ interface RowData {
     MatDialogTitle,
     MatDialogContent,
     MatDialogActions,
-    MatDialogClose,
+    MatDialogClose, 
+    TranslateModule,
   ],
   templateUrl: './map-user-group.component.html',
   styleUrl: './map-user-group.component.css',
