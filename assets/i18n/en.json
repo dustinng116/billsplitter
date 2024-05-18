@@ -3,11 +3,23 @@
   "appName": "Share Bill",
   "sloganApp": "Splitting bill tools that make the joys to be easier",
   "people": "people",
+  "addCbkMember": "Add member list to group",
+  "name": "Name",
+  "button": {
+    "cancel": "Cancel",
+    "save": "Save"
+  },
   "group": {
     "title": "Let's add joy group!",
     "groupName": "Group name",
     "amount": "Group amount",
-    "btnAddGroup": "Add Group"
+    "btnAddGroup": "Add Group",
+    "titleTableName": "Group Name",
+    "titleTableAmount": "Amount(persons)"
+  },
+  "listMember": {
+    "title": "Member List",
+    "btnMember": "Member Details"
   },
   "bills": {
     "title": "List of Bills",
@@ -24,9 +36,19 @@
     "total": "Total",
     "avgTotal": "Cash/person"
   },
+  "dialog": {
+    "title": "Member List who join to each bill"
+  },
+  "tableMemberDetail": {
+    "name": "Member name",
+    "totalBill": "Total/member",
+    "textTable": "Member Share Bill Details"
+  },
   "noti": {
     "addGroupSuccess": "Add group successfully!",
-    "errorInputGroup" : "Please re-check about the input group information!",
-    "duplicateGroup" : "Duplicate in group name, please choose another name!"
+    "errorInputGroup": "Please re-check about the input group information!",
+    "duplicateGroup": "Duplicate in group name, please choose another name!",
+    "textareaEmpty": "There's no member in the list!",
+    "errorListMemberDetailEmpty": "Please edit Member Details for showing "
   }
 }
