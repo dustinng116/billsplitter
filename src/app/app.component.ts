@@ -19,9 +19,9 @@ export class AppComponent implements OnInit {
     translate.addLangs(['en', 'vi']);
     translate.setDefaultLang('en'); 
     this.currentLanguage = localStorage.getItem('languageSite') || null;
-    if(!this.currentLanguage)localStorage.setItem('languageSite', 'en');
+    if(!this.currentLanguage)localStorage.setItem('languageSite', 'vi');
     const browserLang = translate.getBrowserLang();
-    translate.use(browserLang?.match(/en|vi/) ? browserLang : 'en'); 
+    translate.use(browserLang?.match(/en|vi/) ? browserLang : 'vi'); 
   }
   ngOnInit() {
     this.currentLanguage = localStorage.getItem('languageSite') || null;
@@ -29,10 +29,10 @@ export class AppComponent implements OnInit {
       this.translate.use(this.currentLanguage);
     } else {
       const browserLang = this.translate.getBrowserLang();
-      this.translate.use(browserLang?.match(/en|vi/) ? browserLang : 'en');
+      this.translate.use(browserLang?.match(/en|vi/) ? browserLang : 'vi');
       browserLang?.match(/en|vi/)
         ? (this.currentLanguage = browserLang)
-        : (this.currentLanguage = 'en');
+        : (this.currentLanguage = 'vi');
     }
   }
   changeLang(lang: any) {
