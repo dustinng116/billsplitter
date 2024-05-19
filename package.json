@@ -4,11 +4,10 @@
   "scripts": {
     "ng": "ng",
     "start": "ng serve",
-    "build": "ng build",
+    "build": "rm -rf dist && ng build",
     "watch": "ng build --watch --configuration development",
     "test": "ng test",
-    "ghdeploy" : "ng deploy --base-href 'https://dustinng116.github.io/billsplitter/'",
-    "ghbuild" : "ng build --base-href 'https://dustinng116.github.io/billsplitter/' "
+    "deploy" : "rm -rf dist && ng deploy"
   },
   "private": true,
   "dependencies": {

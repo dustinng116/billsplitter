@@ -37,7 +37,7 @@ import { group } from '@angular/animations';
     MatSelectModule,
     MatSnackBarModule,
     MatCheckboxModule,
-    MatDialogModule, 
+    MatDialogModule,
     TranslateModule,
   ],
   templateUrl: './calculator.component.html',
@@ -143,7 +143,8 @@ export class CalculatorComponent {
       });
       return;
     }
-    const lines = this.form.get('listMember')?.value.split('\n');
+    const listMemberValue = this.form.get('listMember')?.value || '';
+    const lines = listMemberValue.split(/[\n,]+/);
     let matrixMemberAndGroup: any = [];
     this.listMember = lines;
 

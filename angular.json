@@ -13,6 +13,8 @@
         "build": {
           "builder": "@angular-devkit/build-angular:application",
           "options": {
+            "baseHref": "https://dustinng116.github.io/billsplitter/",
+            "deployUrl": "/billsplitter/",
             "outputPath": "dist/bill-splitter",
             "index": "src/index.html",
             "browser": "src/main.ts",
@@ -23,12 +25,15 @@
               "node_modules/bootstrap/dist/css/bootstrap.min.css",
               "node_modules/ngx-toastr/toastr.css",
               "@angular/material/prebuilt-themes/indigo-pink.css",
+              "src/assets/demo/demo.css",
+              "src/assets/css/material-kit.css",
               "src/styles.css"
             ],
             "scripts": []
           },
           "configurations": {
-            "production": { 
+            "production": {
+              "index": "src/index.html",
               "budgets": [
                 {
                   "type": "initial",
@@ -55,7 +60,7 @@
           "builder": "@angular-devkit/build-angular:dev-server",
           "configurations": {
             "production": {
-              "buildTarget": "bill-splitter:build:production",
+              "buildTarget": "bill-splitter:build:production"
             },
             "development": {
               "buildTarget": "bill-splitter:build:development"
