@@ -49,6 +49,7 @@
     "errorInputGroup": "Please re-check about the input group information!",
     "duplicateGroup": "Duplicate in group name, please choose another name!",
     "textareaEmpty": "There's no member in the list!",
-    "errorListMemberDetailEmpty": "Please edit Member Details for showing "
+    "errorListMemberDetailEmpty": "Please edit Member Details for showing ",
+    "groupLimit" : "Group reach the limitation"
   }
 }

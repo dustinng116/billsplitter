@@ -1,6 +1,6 @@
 {
   "companyName": "Nexus Innovation",
-  "appName": "Chia Nào",
+  "appName": "Chia Đi",
   "sloganApp": "Công cụ giúp mọi cuộc đi chơi trở nên dễ dàng hơn",
   "people": "người",
   "addCbkMember": "Thêm thành viên vào nhóm",
@@ -10,7 +10,7 @@
     "save": "Lưu"
   },
   "group": {
-    "title": "Thêm nhóm chia nào!",
+    "title": "Thêm nhóm chia đi!",
     "groupName": "Tên nhóm",
     "amount": "Số người",
     "btnAddGroup": "Thêm nhóm",
@@ -49,6 +49,7 @@
     "errorInputGroup": "Vui lòng kiểm tra lại thông tin!",
     "duplicateGroup": "Nhóm trùng tên, vui lòng chọn tên khác!",
     "textareaEmpty": "Không có thành viên trong danh sách thêm!",
-    "errorListMemberDetailEmpty": "Vui lòng chỉnh bảng chi tiết nhóm để hiển thị "
+    "errorListMemberDetailEmpty": "Vui lòng chỉnh bảng chi tiết nhóm để hiển thị ",
+    "groupLimit" : "Nhóm đã đủ người"
   }
 }
