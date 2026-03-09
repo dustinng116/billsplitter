@@ -1,12 +1,19 @@
 <body class="index-page sidebar-collapse">
-  <nav class="navbar navbar-transparent navbar-color-on-scroll fixed-top navbar-expand-lg" color-on-scroll="100"
-    id="sectionsNav">
+  <nav
+    class="navbar navbar-transparent navbar-color-on-scroll fixed-top navbar-expand-lg"
+    color-on-scroll="100"
+    id="sectionsNav"
+  >
     <div class="container">
       <div class="navbar-translate">
-        <a class="navbar-brand" href="#">
-          {{ "companyName" | translate }}</a>
-        <button class="navbar-toggler" type="button" data-toggle="collapse" aria-expanded="false"
-          aria-label="Toggle navigation">
+        <a class="navbar-brand" href="#"> {{ "companyName" | translate }}</a>
+        <button
+          class="navbar-toggler"
+          type="button"
+          data-toggle="collapse"
+          aria-expanded="false"
+          aria-label="Toggle navigation"
+        >
           <span class="sr-only">Toggle navigation</span>
           <span class="navbar-toggler-icon"></span>
           <span class="navbar-toggler-icon"></span>
@@ -38,7 +45,7 @@
               <i class="material-icons">unarchive</i> Upgrade to PRO
             </a>
           </li> -->
-          <li class="nav-item">
+          <!-- <li class="nav-item">
             <a class="nav-link" rel="tooltip" title="" data-placement="bottom" href="#" target="_blank"
               data-original-title="Follow us on Twitter" rel="nofollow">
               <i class="fa fa-twitter"></i>
@@ -55,7 +62,7 @@
               data-original-title="Follow us on Instagram" rel="nofollow">
               <i class="fa fa-instagram"></i>
             </a>
-          </li>
+          </li> -->
           <li class="dropdown nav-item">
             <a href="#" class="dropdown-toggle nav-link" data-toggle="dropdown">
               <!-- <i class="material-icons">apps</i>  -->
@@ -64,7 +71,7 @@
             <div class="dropdown-menu dropdown-with-icons">
               @for(lang of translate.getLangs(); track lang){
               <a (click)="changeLang(lang)" class="dropdown-item">
-                {{lang.toUpperCase()}}
+                {{ lang.toUpperCase() }}
               </a>
               }
             </div>
@@ -73,8 +80,11 @@
       </div>
     </div>
   </nav>
-  <div class="page-header header-filter clear-filter purple-filter" data-parallax="true"
-    style="background-image: url('./assets/img/bgsg4.jpg');">
+  <div
+    class="page-header header-filter clear-filter purple-filter"
+    data-parallax="true"
+  >
+    <!-- style="background-image: url('./assets/img/bgsg4.jpg');" -->
     <div class="container">
       <div class="row">
         <div class="col-md-8 ml-auto mr-auto">
@@ -91,17 +101,30 @@
       <div class="col-lg-12 col-md-12">
         <div class="row">
           <div class="col-md-3">
-            <ul class="nav nav-pills nav-pills-icons flex-column" role="tablist">
+            <ul
+              class="nav nav-pills nav-pills-icons flex-column"
+              role="tablist"
+            >
               <!--   color-classes: "nav-pills-primary", "nav-pills-info", "nav-pills-success", "nav-pills-warning","nav-pills-danger"
                                 -->
               <li class="nav-item">
-                <a class="nav-link active" href="#bill-splitter" role="tab" data-toggle="tab">
+                <a
+                  class="nav-link active"
+                  href="#bill-splitter"
+                  role="tab"
+                  data-toggle="tab"
+                >
                   <i class="material-icons">dashboard</i>
                   Share Bill
                 </a>
               </li>
               <li class="nav-item">
-                <a class="nav-link" href="#schedule-2" role="tab" data-toggle="tab">
+                <a
+                  class="nav-link"
+                  href="#schedule-2"
+                  role="tab"
+                  data-toggle="tab"
+                >
                   <i class="material-icons">schedule</i>
                   More
                 </a>
@@ -114,9 +137,7 @@
                 <app-calculator></app-calculator>
                 <router-outlet />
               </div>
-              <div class="tab-pane" id="schedule-2">
-                COMING SOON...
-              </div>
+              <div class="tab-pane" id="schedule-2">COMING SOON...</div>
             </div>
           </div>
         </div>
@@ -215,7 +236,6 @@
       </div>
     </div> -->
 
-
     <!-- <div class="section" id="carousel">
       <div class="container">
         <div class="row">
@@ -277,22 +297,38 @@
       <div class="modal-content">
         <div class="modal-header">
           <h5 class="modal-title">Modal title</h5>
-          <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+          <button
+            type="button"
+            class="close"
+            data-dismiss="modal"
+            aria-label="Close"
+          >
             <i class="material-icons">clear</i>
           </button>
         </div>
         <div class="modal-body">
-          <p>Far far away, behind the word mountains, far from the countries Vokalia and Consonantia, there live the
-            blind texts. Separated they live in Bookmarksgrove right at the coast of the Semantics, a large language
-            ocean. A small river named Duden flows by their place and supplies it with the necessary regelialia. It is a
-            paradisematic country, in which roasted parts of sentences fly into your mouth. Even the all-powerful
-            Pointing has no control about the blind texts it is an almost unorthographic life One day however a small
-            line of blind text by the name of Lorem Ipsum decided to leave for the far World of Grammar.
+          <p>
+            Far far away, behind the word mountains, far from the countries
+            Vokalia and Consonantia, there live the blind texts. Separated they
+            live in Bookmarksgrove right at the coast of the Semantics, a large
+            language ocean. A small river named Duden flows by their place and
+            supplies it with the necessary regelialia. It is a paradisematic
+            country, in which roasted parts of sentences fly into your mouth.
+            Even the all-powerful Pointing has no control about the blind texts
+            it is an almost unorthographic life One day however a small line of
+            blind text by the name of Lorem Ipsum decided to leave for the far
+            World of Grammar.
           </p>
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-link">Nice Button</button>
-          <button type="button" class="btn btn-danger btn-link" data-dismiss="modal">Close</button>
+          <button
+            type="button"
+            class="btn btn-danger btn-link"
+            data-dismiss="modal"
+          >
+            Close
+          </button>
         </div>
       </div>
     </div>
@@ -303,14 +339,10 @@
       <nav class="float-left">
         <ul>
           <li>
-            <a href="#">
-              About Us
-            </a>
+            <a href="#"> About Us </a>
           </li>
           <li>
-            <a href="#">
-              Blog
-            </a>
+            <a href="#"> Blog </a>
           </li>
         </ul>
       </nav>
@@ -329,14 +361,15 @@
       materialKit.initSliders();
     });
 
-
     function scrollToDownload() {
-      if ($('.section-download').length != 0) {
-        $("html, body").animate({
-          scrollTop: $('.section-download').offset().top
-        }, 1000);
+      if ($(".section-download").length != 0) {
+        $("html, body").animate(
+          {
+            scrollTop: $(".section-download").offset().top,
+          },
+          1000
+        );
       }
     }
-
   </script>
 </body>

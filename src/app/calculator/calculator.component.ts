@@ -24,25 +24,24 @@ import { MapUserGroupComponent } from './dialog/map-user-group/map-user-group.co
 import { group } from '@angular/animations';
 
 @Component({
-  selector: 'app-calculator',
-  standalone: true,
-  imports: [
-    CommonModule,
-    FormsModule,
-    ReactiveFormsModule,
-    MatIconModule,
-    MatInputModule,
-    MatButtonModule,
-    MatTableModule,
-    MatSelectModule,
-    MatSnackBarModule,
-    MatCheckboxModule,
-    MatDialogModule,
-    TranslateModule,
-  ],
-  templateUrl: './calculator.component.html',
-  styleUrl: './calculator.component.css',
-  providers: [VndCurrencyPipe],
+    selector: 'app-calculator',
+    imports: [
+        CommonModule,
+        FormsModule,
+        ReactiveFormsModule,
+        MatIconModule,
+        MatInputModule,
+        MatButtonModule,
+        MatTableModule,
+        MatSelectModule,
+        MatSnackBarModule,
+        MatCheckboxModule,
+        MatDialogModule,
+        TranslateModule,
+    ],
+    templateUrl: './calculator.component.html',
+    styleUrl: './calculator.component.css',
+    providers: [VndCurrencyPipe]
 })
 export class CalculatorComponent {
   public form: FormGroup;

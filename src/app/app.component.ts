@@ -4,11 +4,10 @@ import { CalculatorComponent } from './calculator/calculator.component';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { MapUserGroupComponent } from './calculator/dialog/map-user-group/map-user-group.component';
 @Component({
-  selector: 'app-root',
-  standalone: true,
-  templateUrl: './app.component.html',
-  styleUrl: './app.component.css',
-  imports: [RouterOutlet, CalculatorComponent, MapUserGroupComponent, TranslateModule],
+    selector: 'app-root',
+    templateUrl: './app.component.html',
+    styleUrl: './app.component.css',
+    imports: [RouterOutlet, CalculatorComponent, MapUserGroupComponent, TranslateModule]
 })
 export class AppComponent implements OnInit {
   title = 'bill-splitter';

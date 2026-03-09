@@ -21,19 +21,18 @@ interface RowData {
   groups: CheckboxGroup[];
 }
 @Component({
-  selector: 'app-map-user-group',
-  standalone: true,
-  imports: [
-    FormsModule,
-    MatButtonModule,
-    MatDialogTitle,
-    MatDialogContent,
-    MatDialogActions,
-    MatDialogClose, 
-    TranslateModule,
-  ],
-  templateUrl: './map-user-group.component.html',
-  styleUrl: './map-user-group.component.css',
+    selector: 'app-map-user-group',
+    imports: [
+        FormsModule,
+        MatButtonModule,
+        MatDialogTitle,
+        MatDialogContent,
+        MatDialogActions,
+        MatDialogClose,
+        TranslateModule,
+    ],
+    templateUrl: './map-user-group.component.html',
+    styleUrl: './map-user-group.component.css'
 })
 export class MapUserGroupComponent {
   rows: RowData[] = [];
