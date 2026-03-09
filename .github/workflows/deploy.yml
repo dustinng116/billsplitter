@@ -21,7 +21,16 @@ jobs:
       with:
         node-version: '20'
 
+    - name: Cache Node.js modules
+      uses: actions/cache@v3
+      with:
+        path: ~/.npm
+        key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+        restore-keys: |
+          ${{ runner.os }}-node-
+
     - name: Install dependencies
+      if: steps.cache.outputs.cache-hit != 'true'
       run: npm install
 
     - name: Build project
@@ -31,5 +40,5 @@ jobs:
       uses: peaceiris/actions-gh-pages@v3
       with:
         github_token: ${{ secrets.GITHUB_TOKEN }}
-        publish_dir: ./dist
+        publish_dir: ./dist/bill-splitter
         allow_empty_commit: true
