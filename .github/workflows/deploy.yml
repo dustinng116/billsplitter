@@ -19,22 +19,17 @@ jobs:
           node-version: '20'
           cache: 'npm'
 
-      - name: Configure npm authentication
-        run: |
-          echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" > ~/.npmrc
-          echo "registry=https://registry.npmjs.org/" >> ~/.npmrc
-
       - name: Install dependencies
         run: npm ci
 
-      - name: Debug npm authentication
-        run: cat ~/.npmrc
+      - name: Build
+        run: npm run build
 
-      - name: Build and test
-        run: npm run build && npm test
+      - name: Test
+        run: npx ng test --watch=false --browsers=ChromeHeadless
 
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./build
+          publish_dir: ./dist/bill-splitter/browser
