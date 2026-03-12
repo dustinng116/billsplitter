@@ -54,19 +54,22 @@ export class CommonNoDataDefDirective {
   constructor(public readonly template: TemplateRef<unknown>) {}
 }
 
+import { FormsModule } from '@angular/forms';
+
 @Component({
   selector: 'joys-common-table',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, FormsModule],
   template: `
     <div class="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
       <div class="overflow-x-auto hidden lg:block">
         <ng-container [ngTemplateOutlet]="dataTable"></ng-container>
       </div>
 
+
       <div class="block lg:hidden">
         <ng-container *ngIf="mobileRowDef?.template; else mobileTableFallback">
-          <div class="p-4 space-y-3">
+          <div [ngClass]="{'p-4 space-y-3': data.length > 10, 'p-0 space-y-3': data.length <= 10}">
             <ng-container *ngFor="let row of data; index as i; trackBy: trackByData">
               <ng-container
                 [ngTemplateOutlet]="mobileRowDef!.template"
@@ -82,14 +85,23 @@ export class CommonNoDataDefDirective {
         </ng-container>
 
         <ng-template #mobileTableFallback>
-          <div class="overflow-x-auto">
+          <div [ngClass]="{'overflow-x-auto p-4': data.length > 10, 'overflow-x-auto p-0': data.length <= 10}">
             <ng-container [ngTemplateOutlet]="dataTable"></ng-container>
           </div>
         </ng-template>
       </div>
 
-      <div *ngIf="showFooter" class="px-6 py-4 border-t border-slate-100 dark:border-slate-800">
-        <ng-content select="[pagination]"></ng-content>
+      <!-- Pagination/footer: desktop always, mobile only if >10 items -->
+      <div *ngIf="showFooter && (isDesktop() || data.length > 10)" class="px-6 py-4 border-t border-slate-100 dark:border-slate-800">
+        <div class="flex flex-col sm:flex-row sm:items-center gap-2">
+          <label class="flex items-center gap-1 text-xs">
+            Page size:
+            <select [(ngModel)]="pageSize" class="border rounded px-1 py-0.5 text-xs">
+              <option *ngFor="let size of pageSizeOptions" [value]="size">{{ size }}</option>
+            </select>
+          </label>
+          <ng-content select="[pagination]"></ng-content>
+        </div>
       </div>
     </div>
 
@@ -147,7 +159,16 @@ export class CommonTableComponent<T = unknown> {
   @Input() rowClass =
     'table-row-hover hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-all group cursor-pointer';
   @Input() emptyText = 'No data';
+
   @Input() showFooter = true;
+  pageSizeOptions = [5, 10, 20];
+  pageSize = 10;
+  page = 0;
+
+  // Helper to detect desktop (for template logic)
+  isDesktop(): boolean {
+    return window.innerWidth >= 1024;
+  }
 
   @Input() trackByData: (index: number, row: T) => unknown = (index: number) => index;
 

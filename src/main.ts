@@ -33,7 +33,7 @@ import { initializeFirebaseAnalytics } from './firebase';
         </div>
       </div>
 
-      <div class="pointer-events-none fixed inset-x-0 bottom-0 z-50 flex justify-center px-4 pb-[calc(env(safe-area-inset-bottom)+0.55rem)] lg:hidden">
+      <div class="pointer-events-none fixed inset-x-0 bottom-0 z-50 flex justify-center px-4 pb-[calc(env(safe-area-inset-bottom)+2rem)] lg:hidden">
       <div class="liquid-dock-layout pointer-events-auto w-full items-end">
       <nav class="liquid-glass-dock liquid-glass-entrance w-full" [attr.aria-label]="'mobileNav.activities' | translate">
         <div class="grid grid-cols-4 gap-1.5">
@@ -124,6 +124,39 @@ import { initializeFirebaseAnalytics } from './firebase';
   `
 })
 export class App {
+  private touchStartX: number | null = null;
+  private touchStartY: number | null = null;
+  private touchStartTime: number | null = null;
+
+  constructor() {
+    if (typeof globalThis.window !== 'undefined') {
+      globalThis.window.addEventListener('touchstart', this.onTouchStart, { passive: true });
+      globalThis.window.addEventListener('touchend', this.onTouchEnd, { passive: true });
+    }
+  }
+
+  private readonly onTouchStart = (e: TouchEvent) => {
+    if (globalThis.window.innerWidth >= 1024) return; // Only mobile
+    const touch = e.touches[0];
+    if (touch.clientX > 30) return; // Only left edge
+    this.touchStartX = touch.clientX;
+    this.touchStartY = touch.clientY;
+    this.touchStartTime = Date.now();
+  };
+
+  private readonly onTouchEnd = (e: TouchEvent) => {
+    if (globalThis.window.innerWidth >= 1024) return;
+    if (this.touchStartX === null || this.touchStartY === null || this.touchStartTime === null) return;
+    const touch = e.changedTouches[0];
+    const dx = touch.clientX - this.touchStartX;
+    const dy = Math.abs(touch.clientY - this.touchStartY);
+    const dt = Date.now() - this.touchStartTime;
+    // Swipe right, mostly horizontal, quick, at least 50px
+    if (this.touchStartX <= 30 && dx > 50 && dy < 40 && dt < 500) {
+      globalThis.window.history.back();
+    }
+    this.touchStartX = this.touchStartY = this.touchStartTime = null;
+  };
   @ViewChild('mainContent') mainContent!: MainContentComponent;
   @ViewChild('newGroupDialog') newGroupDialog!: NewGroupDialogComponent;
   sidebarCollapsed = false;
