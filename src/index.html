@@ -18,17 +18,22 @@
     />
 
     <meta property="og:image" content="assets/joys-splitter.png" />
+    <meta name="referrer" content="origin-when-cross-origin" />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:image" content="assets/joys-splitter.png" />
 
     <link rel="icon" type="image/png" href="assets/joys-splitter.png" />
     <link rel="apple-touch-icon" href="assets/joys-splitter.png" />
     <meta name="theme-color" content="#135bec" />
-  </head>
-  <body
-    class="bg-background-light dark:bg-background-dark font-display text-slate-900 dark:text-slate-100 transition-colors"
-  >
+
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+
     <style>
+      body {
+        margin: 0;
+        font-family: Inter, sans-serif;
+      }
+
       #splash-screen {
         position: fixed;
         z-index: 9999;
@@ -39,60 +44,64 @@
         background: #f6f6f8;
         transition: opacity 0.4s;
       }
-      #splash-screen .splash-content {
+
+      .splash-content {
         display: flex;
         flex-direction: column;
         align-items: center;
-        justify-content: center;
         text-align: center;
       }
-      #splash-screen .splash-icon {
+
+      .splash-icon {
         width: 128px;
         height: 128px;
       }
-      #splash-screen .splash-title {
+
+      .splash-title {
         font-size: 2rem;
         font-weight: 700;
         color: #135bec;
-        letter-spacing: 0.02em;
+        margin-top: 12px;
       }
-      #splash-screen .splash-desc {
-        margin-top: 0.5rem;
+
+      .splash-desc {
+        margin-top: 4px;
         font-size: 1rem;
         color: #888;
       }
-    </style>
-    <script src="https://accounts.google.com/gsi/client" async defer></script>
-    <style>
-      @media (min-width: 1024px) {
-        #splash-screen .splash-actions { display: none !important; }
-      }
-      @media (max-width: 1023px) {
-        #splash-screen .splash-actions { display: flex !important; }
-      }
-      #splash-screen .splash-actions {
-        display: none;
+
+      .splash-actions {
+        display: flex;
         flex-direction: column;
         gap: 1rem;
         margin-top: 2rem;
         width: 100%;
         align-items: center;
       }
-      #splash-google-btn { width: 100%; max-width: 260px; }
+
+      #splash-google-btn {
+        width: 100%;
+        max-width: 260px;
+      }
+
       #splash-skip-btn {
         background: #135bec;
-        color: #fff;
+        color: white;
         border: none;
         border-radius: 8px;
         padding: 0.75rem 2rem;
         font-size: 1rem;
         font-weight: 600;
         cursor: pointer;
-        box-shadow: 0 2px 8px #135bec22;
-        transition: background 0.2s;
       }
-      #splash-skip-btn:hover { background: #0e47b3; }
+
+      #splash-skip-btn:hover {
+        background: #0e47b3;
+      }
     </style>
+  </head>
+
+  <body>
     <div id="splash-screen">
       <div class="splash-content">
         <img
@@ -100,46 +109,89 @@
           alt="Joys Splitter"
           class="splash-icon"
         />
+
         <div class="splash-title">Joys Splitter</div>
         <div class="splash-desc">Manage Split Expenses</div>
+
         <div class="splash-actions">
           <div id="splash-google-btn"></div>
           <button id="splash-skip-btn">Skip and let's joy</button>
         </div>
       </div>
     </div>
+
     <joys-root>Loading...</joys-root>
+
     <script>
       function hideSplash() {
         var splash = document.getElementById("splash-screen");
         if (splash) splash.style.opacity = "0";
-        setTimeout(function () { if (splash) splash.style.display = "none"; }, 400);
+        setTimeout(function () {
+          if (splash) splash.style.display = "none";
+        }, 400);
       }
+
       globalThis.addEventListener("DOMContentLoaded", function () {
-        // Google button
-        if (globalThis.google && globalThis.google.accounts && globalThis.google.accounts.id) {
-          globalThis.google.accounts.id.initialize({
-            client_id: "45157459483-mdurood55e9vv5dpjqda8chv62fgvjdf.apps.googleusercontent.com",
-            callback: function (response) {
-              // You should handle the credential here
-              hideSplash();
-            }
-          });
-          globalThis.google.accounts.id.renderButton(
-            document.getElementById("splash-google-btn"),
-            { theme: "outline", size: "large", width: 260 }
-          );
-        } else {
-          // fallback: show a placeholder button
-          var btn = document.createElement('button');
-          btn.textContent = 'Login with Google';
-          btn.style = 'background:#fff;color:#135bec;border:1px solid #135bec;border-radius:8px;padding:0.75rem 2rem;font-size:1rem;font-weight:600;cursor:pointer;box-shadow:0 2px 8px #135bec22;width:100%;max-width:260px;';
+        var googleBtnRendered = false;
+
+        function renderFallbackBtn() {
+          if (googleBtnRendered) return;
+
+          var btn = document.createElement("button");
+          btn.textContent = "Login with Google";
+          btn.style =
+            "background:#fff;color:#135bec;border:1px solid #135bec;border-radius:8px;padding:0.75rem 2rem;font-size:1rem;font-weight:600;cursor:pointer;box-shadow:0 2px 8px #135bec22;width:100%;max-width:260px;";
+
           btn.onclick = hideSplash;
-          var container = document.getElementById('splash-google-btn');
+
+          var container = document.getElementById("splash-google-btn");
           if (container) container.appendChild(btn);
+
+          googleBtnRendered = true;
         }
-        // Skip button
-        var skipBtn = document.getElementById('splash-skip-btn');
+
+        function initGoogle() {
+          if (!window.google || !google.accounts || !google.accounts.id) {
+            setTimeout(initGoogle, 120);
+            return;
+          }
+
+          try {
+            const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+
+            google.accounts.id.initialize({
+              client_id:
+                "45157459483-mdurood55e9vv5dpjqda8chv62fgvjdf.apps.googleusercontent.com",
+              callback: function (response) {
+                hideSplash();
+              },
+              ux_mode: isIOS ? "redirect" : "popup",
+            });
+
+            google.accounts.id.renderButton(
+              document.getElementById("splash-google-btn"),
+              {
+                theme: "outline",
+                size: "large",
+                width: 260,
+              }
+            );
+
+            googleBtnRendered = true;
+          } catch (e) {
+            console.warn("Google login failed", e);
+            renderFallbackBtn();
+          }
+        }
+
+        // start trying to load Google login
+        initGoogle();
+
+        // fallback after 3 seconds
+        setTimeout(renderFallbackBtn, 3000);
+
+        // skip button
+        var skipBtn = document.getElementById("splash-skip-btn");
         if (skipBtn) skipBtn.onclick = hideSplash;
       });
     </script>
