@@ -55,6 +55,6 @@ export class ThemeService {
     if (savedMode === 'light' || savedMode === 'dark' || savedMode === 'system') {
       return savedMode;
     }
-    return 'system';
+    return 'light';
   }
 }

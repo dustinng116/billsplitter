@@ -372,6 +372,6 @@ export class TranslationService {
 
   private getInitialLanguage(): AppLanguage {
     const savedLanguage = localStorage.getItem(STORAGE_KEY);
-    return savedLanguage === 'VN' ? 'VN' : 'EN';
+    return savedLanguage === 'EN' ? 'EN' : 'VN';
   }
 }

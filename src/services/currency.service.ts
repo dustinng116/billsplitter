@@ -105,9 +105,9 @@ export class CurrencyService {
   private readInitialCurrency(): AppCurrency {
     try {
       const savedCurrency = localStorage.getItem(this.storageKey);
-      return savedCurrency === 'VND' ? 'VND' : 'USD';
+      return savedCurrency === 'USD' ? 'USD' : 'VND';
     } catch {
-      return 'USD';
+      return 'VND';
     }
   }
 }
