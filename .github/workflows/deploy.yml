@@ -1,44 +1,77 @@
-name: Deploy to GitHub Pages
+name: Build and Deploy to GitHub Pages
 
 on:
   push:
     branches:
       - main
+  workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v2
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Set up Node.js
-      uses: actions/setup-node@v2
-      with:
-        node-version: '20'
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
 
-    - name: Cache Node.js modules
-      uses: actions/cache@v3
-      with:
-        path: ~/.npm
-        key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
-        restore-keys: |
-          ${{ runner.os }}-node-
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
 
-    - name: Install dependencies
-      if: steps.cache.outputs.cache-hit != 'true'
-      run: npm install
+      - name: Install dependencies
+        run: npm ci
 
-    - name: Build project
-      run: npm run build
+      - name: Create production environment file
+        shell: bash
+        run: |
+          cat > src/environments/environment.prod.ts <<'EOF'
+          export const environment = {
+            production: true,
+            firebase: {
+              apiKey: '${{ secrets.FIREBASE_API_KEY }}',
+              authDomain: '${{ secrets.FIREBASE_AUTH_DOMAIN }}',
+              projectId: '${{ secrets.FIREBASE_PROJECT_ID }}',
+              storageBucket: '${{ secrets.FIREBASE_STORAGE_BUCKET }}',
+              messagingSenderId: '${{ secrets.FIREBASE_MESSAGING_SENDER_ID }}',
+              appId: '${{ secrets.FIREBASE_APP_ID }}',
+              measurementId: '${{ secrets.FIREBASE_MEASUREMENT_ID }}',
+              databaseURL: '${{ secrets.FIREBASE_DATABASE_URL }}'
+            }
+          };
+          EOF
 
-    - name: Deploy to GitHub Pages
-      uses: peaceiris/actions-gh-pages@v3
-      with:
-        github_token: ${{ secrets.GITHUB_TOKEN }}
-        publish_dir: ./dist/bill-splitter/browser
-        allow_empty_commit: true
+      - name: Build project
+        run: npx ng build --configuration production --base-href "/${{ github.event.repository.name }}/"
+
+      - name: Add GitHub Pages marker
+        run: touch dist/joys-splitter/browser/.nojekyll
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist/joys-splitter/browser
+
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
