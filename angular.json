@@ -30,7 +30,9 @@
             }
           },
           "options": {
-            "assets": [],
+            "assets": [
+              "src/assets"
+            ],
             "index": "src/index.html",
             "browser": "src/main.ts",
             "outputPath": "dist/joys-splitter",
