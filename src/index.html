@@ -3,19 +3,87 @@
   <head>
     <title>Joys Splitter - Manage Split Expenses</title>
     <meta charset="UTF-8" />
-    <base href="/">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <base href="/" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap">
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap">
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap"
+    />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap"
+    />
 
-    <meta property="og:image" content="https://bolt.new/static/og_default.png" />
+    <meta property="og:image" content="assets/joys-splitter.png" />
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:image" content="https://bolt.new/static/og_default.png" />
+    <meta name="twitter:image" content="assets/joys-splitter.png" />
+
+    <link rel="icon" type="image/png" href="assets/joys-splitter.png" />
+    <link rel="apple-touch-icon" href="assets/joys-splitter.png" />
+    <meta name="theme-color" content="#135bec" />
   </head>
-  <body class="bg-background-light dark:bg-background-dark font-display text-slate-900 dark:text-slate-100 transition-colors">
+  <body
+    class="bg-background-light dark:bg-background-dark font-display text-slate-900 dark:text-slate-100 transition-colors"
+  >
+    <style>
+      #splash-screen {
+        position: fixed;
+        z-index: 9999;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #f6f6f8;
+        transition: opacity 0.4s;
+      }
+      #splash-screen .splash-content {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+      }
+      #splash-screen .splash-icon {
+        width: 128px;
+        height: 128px;
+      }
+      #splash-screen .splash-title {
+        font-size: 2rem;
+        font-weight: 700;
+        color: #135bec;
+        letter-spacing: 0.02em;
+      }
+      #splash-screen .splash-desc {
+        margin-top: 0.5rem;
+        font-size: 1rem;
+        color: #888;
+      }
+    </style>
+    <div id="splash-screen">
+      <div class="splash-content">
+        <img
+          src="assets/joys-splitter.png"
+          alt="Joys Splitter"
+          class="splash-icon"
+        />
+        <div class="splash-title">Joys Splitter</div>
+        <div class="splash-desc">Manage Split Expenses</div>
+      </div>
+    </div>
     <joys-root>Loading...</joys-root>
+    <script>
+      globalThis.addEventListener("DOMContentLoaded", function () {
+        setTimeout(function () {
+          var splash = document.getElementById("splash-screen");
+          if (splash) splash.style.opacity = "0";
+          setTimeout(function () {
+            if (splash) splash.style.display = "none";
+          }, 400);
+        }, 800);
+      });
+    </script>
   </body>
 </html>
