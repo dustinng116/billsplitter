@@ -1,4 +1,6 @@
 import { Component, EventEmitter, Output, ViewChild } from '@angular/core';
+import { UserSessionService } from '../../services/user-session.service';
+import { Observable } from 'rxjs';
 import { CommonModule } from '@angular/common';
 import { DashboardComponent } from '../dashboard/dashboard.component';
 import { GroupDetailComponent } from '../group-detail/group-detail.component';
@@ -19,7 +21,7 @@ type ViewType = 'dashboard' | 'group-detail' | 'joys-table' | 'friends' | 'activ
   standalone: true,
   imports: [CommonModule, DashboardComponent, GroupDetailComponent, JoysTableComponent, FriendsPageComponent, ActivitiesPageComponent, TranslatePipe],
   template: `
-    <main class="h-full overflow-y-auto bg-slate-50 dark:bg-background-dark w-full pb-[calc(env(safe-area-inset-bottom)+6rem)] lg:pb-0">
+    <main class="h-full overflow-y-auto bg-slate-50 dark:bg-background-dark w-full" style="padding-bottom:calc(env(safe-area-inset-bottom,0px) + 6rem);padding-top:env(safe-area-inset-top,0px);padding-left:env(safe-area-inset-left,0px);padding-right:env(safe-area-inset-right,0px);">
       <!-- Dashboard View -->
       <div *ngIf="currentView === 'dashboard'" class="w-full page-fade-in">
         <joys-dashboard
@@ -53,17 +55,30 @@ type ViewType = 'dashboard' | 'group-detail' | 'joys-table' | 'friends' | 'activ
       <section *ngIf="currentView === 'account'" class="p-5 md:p-8 page-fade-in">
         <div class="mx-auto flex max-w-xl flex-col gap-4 pb-4">
           <section class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-            <div class="flex items-center gap-4">
+            <div class="flex items-center gap-4" *ngIf="(user$ | async) as user; else guestBlock">
               <img
-                [src]="mockUser.avatar"
-                [alt]="mockUser.name"
+                [src]="user.photoURL || 'https://ui-avatars.com/api/?name=' + (user.displayName || user.email)"
+                [alt]="user.displayName || user.email"
                 class="h-16 w-16 rounded-full object-cover ring-2 ring-primary/20"
               />
               <div class="min-w-0">
-                <h2 class="truncate text-lg font-bold">{{ mockUser.name }}</h2>
-                <p class="truncate text-sm text-slate-500 dark:text-slate-400">{{ mockUser.email }}</p>
+                <h2 class="truncate text-lg font-bold">{{ user.displayName || user.email }}</h2>
+                <p class="truncate text-sm text-slate-500 dark:text-slate-400">{{ user.email }}</p>
               </div>
             </div>
+            <ng-template #guestBlock>
+              <div class="flex items-center gap-4">
+                <img
+                  src="https://ui-avatars.com/api/?name=Guest"
+                  alt="Guest"
+                  class="h-16 w-16 rounded-full object-cover ring-2 ring-primary/20"
+                />
+                <div class="min-w-0">
+                  <h2 class="truncate text-lg font-bold">Guest</h2>
+                  <p class="truncate text-sm text-slate-500 dark:text-slate-400">Not signed in</p>
+                </div>
+              </div>
+            </ng-template>
           </section>
 
           <section class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
@@ -142,15 +157,27 @@ type ViewType = 'dashboard' | 'group-detail' | 'joys-table' | 'friends' | 'activ
             </div>
           </section>
 
-          <button
-            type="button"
-            (click)="onLogout()"
-            class="flex h-12 items-center justify-center gap-2 rounded-xl border border-rose-200 bg-rose-50 text-sm font-bold text-rose-600 transition-colors hover:bg-rose-100 dark:border-rose-900/40 dark:bg-rose-900/20 dark:text-rose-300"
-          >
-            <span class="material-symbols-outlined text-[18px]">logout</span>
-            <span>{{ 'account.logout' | translate }}</span>
-          </button>
-
+          <ng-container *ngIf="(user$ | async) as user; else signInBtn">
+            <button
+              type="button"
+              (click)="onLogout()"
+              class="flex h-12 items-center justify-center gap-2 rounded-xl border border-rose-200 bg-rose-50 text-sm font-bold text-rose-600 transition-colors hover:bg-rose-100 dark:border-rose-900/40 dark:bg-rose-900/20 dark:text-rose-300"
+            >
+              <span class="material-symbols-outlined text-[18px]">logout</span>
+              <span>{{ 'account.logout' | translate }}</span>
+            </button>
+          </ng-container>
+          <ng-template #signInBtn>
+            <button
+              type="button"
+              (click)="signInWithGoogleAccount()"
+              class="flex h-12 items-center justify-center gap-2 rounded-xl border border-[#135bec] bg-white text-[#135bec] text-sm font-bold shadow-sm hover:bg-[#f0f6ff] transition-colors"
+              style="width:100%"
+            >
+              <span class="material-symbols-outlined text-[18px]">login</span>
+              <span>Sign in with Google</span>
+            </button>
+          </ng-template>
           <p class="px-1 text-center text-xs text-slate-400">{{ 'account.mobileHint' | translate }}</p>
         </div>
       </section>
@@ -165,18 +192,30 @@ export class MainContentComponent {
   currentView: ViewType = 'joys-table';
   selectedJoyId: string = '';
   selectedGroupId: string = '';
-  readonly mockUser = {
-    name: 'Alex Morgan',
-    email: 'alex.morgan@example.com',
-    avatar: 'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg?auto=compress&cs=tinysrgb&w=300'
-  };
+  user$: Observable<any>;
+
+  signInWithGoogleAccount() {
+    if ((window as any).firebaseAuthSignInWithGoogle) {
+      (window as any).firebaseAuthSignInWithGoogle();
+    } else {
+      const win = window as any;
+      if (win.google && win.google.accounts && win.google.accounts.id) {
+        try {
+          win.google.accounts.id.prompt();
+        } catch {}
+      }
+    }
+  }
 
   constructor(
     private readonly translationService: TranslationService,
     private readonly currencyService: CurrencyService,
     private readonly themeService: ThemeService,
-    private readonly activityService: ActivityService
-  ) {}
+    private readonly activityService: ActivityService,
+    private readonly userSession: UserSessionService
+  ) {
+    this.user$ = this.userSession.user$;
+  }
 
   onGroupClicked(groupId: any) {
     this.selectedGroupId = groupId;
@@ -276,15 +315,16 @@ export class MainContentComponent {
   }
 
   onLogout(): void {
-    console.log('Mock logout action triggered');
-    void this.activityService.logActivity({
-      type: 'logout',
-      title: 'Logged out',
-      description: 'User tapped logout from account page'
+    this.userSession.signOut().then(() => {
+      void this.activityService.logActivity({
+        type: 'logout',
+        title: 'Logged out',
+        description: 'User logged out via Firebase Auth'
+      });
+      this.currentView = 'joys-table';
+      this.selectedJoyId = '';
+      this.selectedGroupId = '';
     });
-    this.currentView = 'joys-table';
-    this.selectedJoyId = '';
-    this.selectedGroupId = '';
   }
 
   openAddFriendDialog(): void {
