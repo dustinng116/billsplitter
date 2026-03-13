@@ -170,9 +170,9 @@
             </button>
 
             <!-- Group Card Layer -->
-            <div (click)="onGroupClick(group.id)" (touchstart)="onGroupTouchStart(group.id, $event)"
-              (touchmove)="onGroupTouchMove(group.id, $event)" (touchend)="onGroupTouchEnd(group.id)"
-              (touchcancel)="onGroupTouchCancel()" [style.transform]="getSwipeTransform(group.id)"
+            <div (touchstart)="onGroupTouchStart(group.id, $event)" (touchmove)="onGroupTouchMove(group.id, $event)"
+              (touchend)="onGroupTouchEnd(group.id, $event)" (touchcancel)="onGroupTouchCancel()"
+              (click)="onGroupClick(group.id)" [style.transform]="getSwipeTransform(group.id)"
               class="relative z-10 bg-white dark:bg-slate-900 p-4 flex flex-row items-center justify-between transition-transform duration-200 ease-out cursor-pointer">
               <div class="flex items-center gap-4 min-w-0 flex-1">
                 <div
@@ -205,13 +205,6 @@
                     [attr.aria-label]="'groupDetail.addExpense' | translate">
                     <span class="material-symbols-outlined text-[16px]">add_circle</span>
                     <span class="hidden sm:inline">{{ "groupDetail.addExpense" | translate }}</span>
-                  </button>
-
-                  <!-- Desktop Settings Button -->
-                  <button type="button" (click)="onEditGroup(group, $event)"
-                    class="hidden lg:flex h-9 w-9 items-center justify-center rounded-lg bg-slate-50 text-slate-600 transition-all hover:bg-slate-100 dark:bg-slate-800 dark:text-slate-400 dark:hover:bg-slate-700"
-                    [attr.aria-label]="'groupDetail.editGroup' | translate">
-                    <span class="material-symbols-outlined text-[18px]">settings</span>
                   </button>
 
                   <!-- Desktop Delete Button -->
