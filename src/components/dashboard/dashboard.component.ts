@@ -34,6 +34,7 @@ import {
   JoyExpense,
 } from "../../types/joy.interface";
 import { UserSessionService } from "../../services/user-session.service";
+import { ImageUploadService } from "../../services/image-upload.service";
 
 interface SplitBillSummary {
   key: string;
@@ -48,7 +49,10 @@ interface JoyConfigForm {
   category: JoyCategory;
   startDate: string;
   endDate: string;
+  coverImage?: string;
 }
+
+const MOBILE_SWIPE_ACTION_WIDTH = 88;
 
 @Component({
   styleUrl: './dashboard.component.scss',
@@ -66,14 +70,25 @@ export class DashboardComponent implements OnChanges, OnDestroy {
   @Input() joyId = "";
   @Output() groupClicked = new EventEmitter<string>();
   @Output() newGroupClicked = new EventEmitter<string>();
+  @Output() editGroupClicked = new EventEmitter<JoyGroup>();
   @Output() backToJoysClicked = new EventEmitter<void>();
   @ViewChild("quickAddExpenseDialog")
   quickAddExpenseDialog!: AddExpenseDialogComponent;
   @ViewChild("joyConfigDialog", { static: true })
   joyConfigDialog!: TemplateRef<unknown>;
+  @ViewChild("deleteGroupDialog", { static: true })
+  deleteGroupDialog!: TemplateRef<unknown>;
 
   selectedJoy: Joy | null = null;
   groupCards: JoyGroup[] = [];
+  deletingGroupId = "";
+  pendingDeleteGroup: JoyGroup | null = null;
+
+  private openedSwipeGroupId = "";
+  private draggingGroupId = "";
+  private touchStartX = 0;
+  private currentSwipeOffset = 0;
+
   selectedExpenseGroupId = "";
   readonly joyCategories: JoyCategory[] = [
     "Food",
@@ -109,6 +124,7 @@ export class DashboardComponent implements OnChanges, OnDestroy {
     private readonly commonDialogService: CommonDialogService,
     private readonly translationService: TranslationService,
     private readonly userSessionService: UserSessionService,
+    private readonly imageUploadService: ImageUploadService,
     private readonly ngZone: NgZone,
     private readonly cdr: ChangeDetectorRef
   ) {
@@ -138,6 +154,45 @@ export class DashboardComponent implements OnChanges, OnDestroy {
       }
     }
     return total;
+  }
+
+  get isCreator(): boolean {
+    if (!this.selectedJoy || !this.selectedJoy.createdBy || !this.currentUserEmail) {
+      return false;
+    }
+    return this.selectedJoy.createdBy.email.trim().toLowerCase() === this.currentUserEmail;
+  }
+
+  isUploadingCover = false;
+
+  async onCoverImageSelected(event: Event): Promise<void> {
+    const input = event.target as HTMLInputElement;
+    if (!input.files || input.files.length === 0 || !this.joyId) {
+      return;
+    }
+
+    const file = input.files[0];
+    try {
+      this.isUploadingCover = true;
+      this.cdr.detectChanges(); // Ensure spinner shows immediately
+      
+      const compressedFile = await this.imageUploadService.compressImage(file, 1600, 1600, 0.85);
+      const imageUrl = await this.imageUploadService.uploadImage(compressedFile);
+      
+      await this.joyService.updateJoyCoverImage(this.joyId, imageUrl);
+      
+      // Update local joy reference immediately for snappy UI
+      if (this.selectedJoy) {
+        this.selectedJoy.coverImage = imageUrl;
+      }
+    } catch (error) {
+      console.error('Upload failed', error);
+      alert('Failed to upload image. Make sure your ImgBB API key is set.');
+    } finally {
+      this.isUploadingCover = false;
+      input.value = ''; // Reset input
+      this.cdr.detectChanges();
+    }
   }
 
   get totalYouSpent(): number {
@@ -199,6 +254,172 @@ export class DashboardComponent implements OnChanges, OnDestroy {
     }
 
     return this.translationService.tCategory(category);
+  }
+
+  requestDeleteGroup(group: JoyGroup, event: Event): void {
+    event.stopPropagation();
+
+    if (this.deletingGroupId === group.id) {
+      return;
+    }
+
+    this.pendingDeleteGroup = group;
+    this.commonDialogService.open({
+      title: this.translationService.t("dashboard.deleteGroupDialogTitle"),
+      icon: "delete",
+      content: this.deleteGroupDialog,
+      bodyClass: "p-6",
+      actions: this.getDeleteGroupActions(),
+      onClose: () => {
+        this.pendingDeleteGroup = null;
+      },
+    });
+  }
+
+  async deleteGroup(group: JoyGroup): Promise<void> {
+    if (!this.joyId || this.deletingGroupId === group.id) {
+      return;
+    }
+
+    this.deletingGroupId = group.id;
+
+    try {
+      await this.joyService.deleteJoyGroup(this.joyId, group.id);
+      if (this.openedSwipeGroupId === group.id) {
+        this.closeSwipeActions();
+      }
+      this.commonDialogService.close();
+    } catch (error) {
+      console.error("Failed to delete joy group.", error);
+    } finally {
+      this.deletingGroupId = "";
+      this.cdr.detectChanges();
+    }
+  }
+
+  private getDeleteGroupActions(): CommonDialogAction[] {
+    return [
+      {
+        label: this.translationService.t("friends.cancel"),
+        kind: "secondary",
+        disabled: () => !!this.deletingGroupId,
+        handler: () => this.commonDialogService.close(),
+      },
+      {
+        label: () =>
+          this.translationService.t(
+            this.deletingGroupId
+              ? "dashboard.deletingGroup"
+              : "dashboard.deleteGroup"
+          ),
+        icon: () => (this.deletingGroupId ? "progress_activity" : "delete"),
+        kind: "danger",
+        grow: true,
+        disabled: () => !!this.deletingGroupId || !this.pendingDeleteGroup,
+        handler: () => {
+          if (this.pendingDeleteGroup) {
+            void this.deleteGroup(this.pendingDeleteGroup);
+          }
+        },
+      },
+    ];
+  }
+
+  // Mobile Swipe Actions
+  getSwipeTransform(groupId: string): string {
+    if (this.draggingGroupId === groupId) {
+      return `translateX(${this.currentSwipeOffset}px)`;
+    }
+
+    if (this.openedSwipeGroupId === groupId) {
+      return `translateX(-${MOBILE_SWIPE_ACTION_WIDTH}px)`;
+    }
+
+    return "translateX(0px)";
+  }
+
+  isSwipeDeleteVisible(groupId: string): boolean {
+    return this.getSwipeRevealProgress(groupId) > 0;
+  }
+
+  getSwipeDeleteOpacity(groupId: string): string {
+    return this.getSwipeRevealProgress(groupId).toFixed(2);
+  }
+
+  getSwipeDeleteTransform(groupId: string): string {
+    const progress = this.getSwipeRevealProgress(groupId);
+    const offset = (1 - progress) * 24;
+    return `translateX(${offset}px)`;
+  }
+
+  isSwipeDeleteActionEnabled(groupId: string): boolean {
+    return this.openedSwipeGroupId === groupId;
+  }
+
+  onGroupTouchStart(groupId: string, event: TouchEvent): void {
+    if (this.openedSwipeGroupId && this.openedSwipeGroupId !== groupId) {
+      this.closeSwipeActions();
+    }
+    this.draggingGroupId = groupId;
+    this.touchStartX = event.touches[0]?.clientX ?? 0;
+    this.currentSwipeOffset =
+      this.openedSwipeGroupId === groupId ? -MOBILE_SWIPE_ACTION_WIDTH : 0;
+  }
+
+  onGroupTouchMove(groupId: string, event: TouchEvent): void {
+    if (this.draggingGroupId !== groupId) {
+      return;
+    }
+
+    const currentX = event.touches[0]?.clientX ?? this.touchStartX;
+    const deltaX = currentX - this.touchStartX;
+    const baseOffset =
+      this.openedSwipeGroupId === groupId ? -MOBILE_SWIPE_ACTION_WIDTH : 0;
+    this.currentSwipeOffset = Math.max(
+      -MOBILE_SWIPE_ACTION_WIDTH,
+      Math.min(0, baseOffset + deltaX)
+    );
+  }
+
+  onGroupTouchEnd(groupId: string): void {
+    if (this.draggingGroupId !== groupId) {
+      return;
+    }
+
+    if (this.currentSwipeOffset <= -(MOBILE_SWIPE_ACTION_WIDTH / 2)) {
+      this.openedSwipeGroupId = groupId;
+    } else {
+      this.openedSwipeGroupId = "";
+    }
+
+    this.draggingGroupId = "";
+    this.currentSwipeOffset = 0;
+  }
+
+  onGroupTouchCancel(): void {
+    this.draggingGroupId = "";
+    this.currentSwipeOffset = 0;
+  }
+
+  private closeSwipeActions(): void {
+    this.openedSwipeGroupId = "";
+    this.draggingGroupId = "";
+    this.currentSwipeOffset = 0;
+  }
+
+  private getSwipeRevealProgress(groupId: string): number {
+    if (this.openedSwipeGroupId === groupId) {
+      return 1;
+    }
+
+    if (this.draggingGroupId !== groupId || this.currentSwipeOffset >= 0) {
+      return 0;
+    }
+
+    return Math.min(
+      1,
+      Math.abs(this.currentSwipeOffset) / MOBILE_SWIPE_ACTION_WIDTH
+    );
   }
 
   getCategoryIcon(category: string): string {
@@ -282,6 +503,11 @@ export class DashboardComponent implements OnChanges, OnDestroy {
     }
 
     return Array.from(totals.values()).sort((a, b) => b.amount - a.amount);
+  }
+
+  onEditGroup(group: JoyGroup, event: Event) {
+    event.stopPropagation();
+    this.editGroupClicked.emit(group);
   }
 
   private getMemberKey(member: JoyGroupMember): string {
@@ -403,6 +629,7 @@ export class DashboardComponent implements OnChanges, OnDestroy {
       category: this.selectedJoy.category,
       startDate: dateRange.startDate,
       endDate: dateRange.endDate,
+      coverImage: this.selectedJoy.coverImage
     };
     this.joyConfigErrorMessage = "";
     this.isSavingJoyConfig = false;
@@ -463,6 +690,7 @@ export class DashboardComponent implements OnChanges, OnDestroy {
           this.joyConfigForm.startDate,
           this.joyConfigForm.endDate
         ),
+        coverImage: this.joyConfigForm.coverImage,
       });
       this.commonDialogService.close();
     } catch (error) {
@@ -482,6 +710,33 @@ export class DashboardComponent implements OnChanges, OnDestroy {
       this.joyConfigForm.endDate &&
       this.joyConfigForm.startDate <= this.joyConfigForm.endDate
     );
+  }
+
+  isConfigUploadingCover = false;
+
+  async onConfigCoverSelected(event: Event): Promise<void> {
+    const input = event.target as HTMLInputElement;
+    if (!input.files || input.files.length === 0) {
+      return;
+    }
+
+    const file = input.files[0];
+    try {
+      this.isConfigUploadingCover = true;
+      this.cdr.detectChanges(); // spinner shows immediately
+      
+      const compressedFile = await this.imageUploadService.compressImage(file, 1600, 1600, 0.85); // same as main cover
+      const imageUrl = await this.imageUploadService.uploadImage(compressedFile);
+      
+      this.joyConfigForm.coverImage = imageUrl;
+    } catch (error) {
+      console.error('Upload failed', error);
+      alert('Failed to upload image. Make sure your ImgBB API key is set.');
+    } finally {
+      this.isConfigUploadingCover = false;
+      input.value = ''; // Reset input
+      this.cdr.detectChanges();
+    }
   }
 
   private createEmptyJoyConfigForm(): JoyConfigForm {
@@ -668,5 +923,8 @@ export class DashboardComponent implements OnChanges, OnDestroy {
 
       this.groupExpensesUnsubscribers.set(group.id, unsub);
     });
+  }
+  getInitials(name: string): string {
+    return name?.trim() ? name.trim().charAt(0).toUpperCase() : '?';
   }
 }

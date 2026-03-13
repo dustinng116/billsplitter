@@ -6,16 +6,24 @@
           <!-- Group Photo Upload -->
           <section class="flex flex-col items-center gap-3">
             <div class="relative group">
+              <input type="file" #fileUpload class="hidden" accept="image/*" (change)="onPhotoSelected($event)" />
               <div 
-                class="h-24 w-24 rounded-full border-4 border-slate-50 dark:border-slate-800 bg-slate-100 dark:bg-slate-800 bg-center bg-cover flex items-center justify-center overflow-hidden cursor-pointer"
-                [style.background-image]="groupForm.photo ? 'url(' + groupForm.photo + ')' : 'url(https://images.pexels.com/photos/1181396/pexels-photo-1181396.jpeg?auto=compress&cs=tinysrgb&w=300)'"
-                (click)="onPhotoClick()"
+                (click)="fileUpload.click()"
+                class="h-24 w-24 rounded-full border-4 border-slate-50 dark:border-slate-800 bg-center bg-cover flex items-center justify-center overflow-hidden cursor-pointer shadow-sm transition-all hover:scale-105"
+                [ngClass]="groupForm.photo ? '' : getAvatarColorClasses(groupForm.name)"
+                [style.background-image]="groupForm.photo ? 'url(' + groupForm.photo + ')' : ''"
               >
+                <!-- Initial or Photo Placeholder -->
+                <span *ngIf="!groupForm.photo && !isUploadingPhoto" class="text-3xl font-bold text-white uppercase drop-shadow-sm">
+                  {{ getInitials(groupForm.name) }}
+                </span>
+
                 <div class="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <span class="material-symbols-outlined text-white text-2xl">photo_camera</span>
+                  <span *ngIf="isUploadingPhoto" class="material-symbols-outlined text-white text-3xl animate-spin">progress_activity</span>
+                  <span *ngIf="!isUploadingPhoto" class="material-symbols-outlined text-white text-3xl">photo_camera</span>
                 </div>
               </div>
-              <div class="absolute bottom-0 right-0 h-6 w-6 rounded-full bg-primary flex items-center justify-center text-white border-2 border-white dark:border-slate-900 shadow-sm">
+              <div class="absolute bottom-0 right-0 h-6 w-6 rounded-full bg-primary flex items-center justify-center text-white border-2 border-white dark:border-slate-900 shadow-sm pointer-events-none">
                 <span class="material-symbols-outlined text-sm">edit</span>
               </div>
             </div>
@@ -34,7 +42,7 @@
                 <input 
                   [(ngModel)]="groupForm.name"
                   class="w-full pl-12 pr-4 py-3 bg-slate-50 dark:bg-slate-800 border-transparent focus:border-primary focus:ring-2 focus:ring-primary/20 rounded-xl transition-all outline-none" 
-                  placeholder="e.g., Europe Summer Trip 2024" 
+                  [placeholder]="'newGroup.placeholderName' | translate" 
                   type="text"
                 />
               </div>

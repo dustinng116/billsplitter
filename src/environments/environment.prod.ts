@@ -9,5 +9,6 @@ export const environment = {
     appId: 'CHANGE_ME',
     measurementId: 'CHANGE_ME',
     databaseURL: 'CHANGE_ME'
-  }
+  },
+  imgbbApiKey: ''
 };

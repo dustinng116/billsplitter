@@ -11,6 +11,7 @@ import { TranslatePipe } from '../../pipes/translate.pipe';
 import { TranslationService } from '../../services/translation.service';
 import { UserSessionService } from '../../services/user-session.service';
 import { AvatarColorService } from '../../services/avatar-color.service';
+import { ImageUploadService } from '../../services/image-upload.service';
 import { Friend } from '../../types/friend.interface';
 import { JoyGroup, JoyGroupMember } from '../../types/joy.interface';
 
@@ -106,6 +107,7 @@ export class NewGroupDialogComponent implements OnInit, OnDestroy {
     private readonly translationService: TranslationService,
     private readonly userSessionService: UserSessionService,
     private readonly avatarColorService: AvatarColorService,
+    private readonly imageUploadService: ImageUploadService,
     private readonly ngZone: NgZone,
     private readonly cdr: ChangeDetectorRef
   ) {
@@ -247,8 +249,31 @@ export class NewGroupDialogComponent implements OnInit, OnDestroy {
     return this.isEditMode ? 'save' : 'group_add';
   }
 
-  onPhotoClick() {
-    console.log('Photo upload clicked');
+  isUploadingPhoto = false;
+
+  async onPhotoSelected(event: Event): Promise<void> {
+    const input = event.target as HTMLInputElement;
+    if (!input.files || input.files.length === 0) {
+      return;
+    }
+
+    const file = input.files[0];
+    try {
+      this.isUploadingPhoto = true;
+      this.cdr.detectChanges(); // Spinner shows immediately
+      
+      const compressedFile = await this.imageUploadService.compressImage(file, 800, 800, 0.85); // smaller for groups
+      const imageUrl = await this.imageUploadService.uploadImage(compressedFile);
+      
+      this.groupForm.photo = imageUrl;
+    } catch (error) {
+      console.error('Upload failed', error);
+      alert(this.t('common.uploadError'));
+    } finally {
+      this.isUploadingPhoto = false;
+      input.value = ''; // Reset input
+      this.cdr.detectChanges();
+    }
   }
 
   selectCategory(categoryId: string) {
@@ -394,6 +419,10 @@ export class NewGroupDialogComponent implements OnInit, OnDestroy {
 
   getAvatarColorClasses(seed: string): string {
     return this.avatarColorService.getInitialAvatarClasses(seed);
+  }
+
+  getInitials(name: string): string {
+    return name?.trim()?.charAt(0)?.toUpperCase() || '?';
   }
 
   isFormValid(): boolean {
@@ -584,7 +613,7 @@ export class NewGroupDialogComponent implements OnInit, OnDestroy {
   }
 
   private createCurrentUserMember(user: { uid?: string | null; displayName?: string | null; email?: string | null; photoURL?: string | null } | null): GroupMember {
-    const name = user?.displayName?.trim() || user?.email?.trim() || 'Guest';
+    const name = user?.displayName?.trim() || user?.email?.trim() || this.t('common.guest');
 
     return {
       id: 'current-user',
@@ -597,16 +626,6 @@ export class NewGroupDialogComponent implements OnInit, OnDestroy {
 
   private createFallbackCurrentUserMember(): GroupMember {
     return this.createCurrentUserMember(null);
-  }
-
-  private getInitials(name: string): string {
-    return name
-      .trim()
-      .split(/\s+/)
-      .filter(Boolean)
-      .slice(0, 2)
-      .map((part) => part[0]?.toUpperCase() ?? '')
-      .join('') || 'FR';
   }
 
   getCurrentUserLabel(memberId: string): string {

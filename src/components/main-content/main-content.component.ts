@@ -45,6 +45,7 @@ type ViewType =
 })
 export class MainContentComponent implements OnInit {
   @Output() newGroupClicked = new EventEmitter<string>();
+  @Output() editGroupClicked = new EventEmitter<{ joyId: string; group: any }>();
   @Output() addFriendClicked = new EventEmitter<void>();
   @Output() pageDataLoaded = new EventEmitter<string>();
   @ViewChild(FriendsPageComponent) friendsPage?: FriendsPageComponent;
@@ -61,8 +62,8 @@ export class MainContentComponent implements OnInit {
   pullDistance = 0;
   isPulling = false;
   isPullRefreshing = false;
-  readonly pullTriggerDistance = 80;
-  private readonly pullMaxDistance = 96;
+  readonly pullTriggerDistance = 70;
+  private readonly pullMaxDistance = 110;
   private readonly routeSubscription: Subscription;
   readonly supportedCurrencies: AppCurrency[];
   isSyncingCurrencyRates = false;
@@ -177,9 +178,10 @@ export class MainContentComponent implements OnInit {
       return 1;
     }
 
+    // Show more aggressively: starts showing at 5px, fully opaque at 40px
     return Math.max(
       0,
-      Math.min(1, this.pullDistance / this.pullTriggerDistance)
+      Math.min(1, (this.pullDistance - 5) / 35)
     );
   }
 
@@ -223,7 +225,7 @@ export class MainContentComponent implements OnInit {
       return;
     }
     const target = event.currentTarget as HTMLElement | null;
-    if (!target || target.scrollTop > 0) {
+    if (!target || target.scrollTop > 5) {
       this.pullStartY = null;
       return;
     }
@@ -330,6 +332,10 @@ export class MainContentComponent implements OnInit {
 
     this.setPageLoading(true);
     this.appRouteService.goToGroupDetail(this.selectedJoyId, String(groupId));
+  }
+
+  onEditGroupClicked(group: any) {
+    this.editGroupClicked.emit({ joyId: this.selectedJoyId, group });
   }
 
   onBackToDashboard() {

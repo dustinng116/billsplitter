@@ -50,7 +50,7 @@
               <input *ngIf="editingFriendId === friend.id"
                 [(ngModel)]="editForm.name"
                 type="text"
-                placeholder="Full name"
+                [placeholder]="'friends.placeholderName' | translate"
                 class="w-full min-w-[140px] rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-900 outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary/20 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
               />
             </ng-template>
@@ -63,7 +63,7 @@
               <input *ngIf="editingFriendId === friend.id"
                 [(ngModel)]="editForm.email"
                 type="email"
-                placeholder="name@email.com"
+                [placeholder]="'friends.placeholderEmail' | translate"
                 class="w-full min-w-[160px] rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary/20 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
               />
             </ng-template>
@@ -79,7 +79,7 @@
                 type="tel"
                 inputmode="numeric"
                 pattern="[0-9]*"
-                placeholder="0123456789"
+                [placeholder]="'friends.placeholderPhone' | translate"
                 class="w-full min-w-[130px] rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary/20 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
               />
             </ng-template>
@@ -178,11 +178,11 @@
               </ng-container>
               <ng-container *ngIf="editingFriendId === friend.id">
                 <div class="space-y-2">
-                  <input [(ngModel)]="editForm.name" type="text" placeholder="Full name"
+                  <input [(ngModel)]="editForm.name" type="text" [placeholder]="'friends.placeholderName' | translate"
                     class="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary/20 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100" />
-                  <input [(ngModel)]="editForm.email" type="email" placeholder="name@email.com"
+                  <input [(ngModel)]="editForm.email" type="email" [placeholder]="'friends.placeholderEmail' | translate"
                     class="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary/20 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100" />
-                  <input [(ngModel)]="editForm.phone" (ngModelChange)="onEditPhoneInput($event)" type="tel" inputmode="numeric" pattern="[0-9]*" placeholder="0123456789"
+                  <input [(ngModel)]="editForm.phone" (ngModelChange)="onEditPhoneInput($event)" type="tel" inputmode="numeric" pattern="[0-9]*" [placeholder]="'friends.placeholderPhone' | translate"
                     class="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary/20 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100" />
                   <div class="flex justify-end gap-1.5 pt-1">
                     <button type="button" (click)="cancelEdit(); $event.stopPropagation()" [disabled]="isSaving"
@@ -231,7 +231,7 @@
               [(ngModel)]="friendForm.name"
               [disabled]="isSubmitting"
               type="text"
-              placeholder="e.g., Sarah Miller"
+              [placeholder]="'friends.placeholderNameHint' | translate"
               class="w-full rounded-xl border-transparent bg-slate-50 px-4 py-3 outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary/20 dark:bg-slate-800"
             />
           </div>
@@ -242,7 +242,7 @@
               [(ngModel)]="friendForm.email"
               [disabled]="isSubmitting"
               type="email"
-              placeholder="name@email.com"
+              [placeholder]="'friends.placeholderEmail' | translate"
               class="w-full rounded-xl border-transparent bg-slate-50 px-4 py-3 outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary/20 dark:bg-slate-800"
             />
           </div>
@@ -256,7 +256,7 @@
               type="tel"
               inputmode="numeric"
               pattern="[0-9]*"
-              placeholder="0123456789"
+              [placeholder]="'friends.placeholderPhone' | translate"
               class="w-full rounded-xl border-transparent bg-slate-50 px-4 py-3 outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary/20 dark:bg-slate-800"
             />
           </div>

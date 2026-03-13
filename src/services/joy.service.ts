@@ -278,7 +278,7 @@ export class JoyService {
 
   async updateJoy(
     joyId: string,
-    joyData: Pick<Joy, 'joyName' | 'category' | 'date'>
+    joyData: Pick<Joy, 'joyName' | 'category' | 'date' | 'coverImage'>
   ): Promise<Joy> {
     const iconInfo = this.getCategoryIcon(joyData.category);
     const payload = {
@@ -332,6 +332,25 @@ export class JoyService {
       iconBg: iconInfo.iconBg,
       iconColor: iconInfo.iconColor
     };
+  }
+
+  async updateJoyCoverImage(joyId: string, coverImage: string): Promise<void> {
+    if (this.dataScopeService.isGuest()) {
+      await this.guestStorageService.fakeApiDelay();
+      const joys = this.readGuestJoysRecord();
+      if (joys[joyId]) {
+        joys[joyId].coverImage = coverImage;
+        this.writeGuestJoysRecord(joys);
+      }
+      return;
+    }
+
+    const ownerUid = await this.resolveJoyOwnerUid(joyId);
+    if (!ownerUid) {
+      throw new Error('Joy not found');
+    }
+
+    await update(ref(db, `users/${ownerUid}/joys/${joyId}`), { coverImage });
   }
 
   async deleteJoy(joyId: string): Promise<void> {
@@ -693,6 +712,26 @@ export class JoyService {
     await update(groupRef, { totalSpent: nextTotal });
   }
 
+  async deleteJoyGroup(joyId: string, groupId: string): Promise<void> {
+    if (this.dataScopeService.isGuest()) {
+      await this.guestStorageService.fakeApiDelay();
+      const joys = this.readGuestJoysRecord();
+      if (joys[joyId]?.groups?.[groupId]) {
+        delete joys[joyId].groups[groupId];
+      }
+      this.writeGuestJoysRecord(joys);
+      return;
+    }
+
+    const ownerUid = await this.resolveJoyOwnerUid(joyId);
+    if (!ownerUid) {
+      throw new Error('Joy not found');
+    }
+
+    await remove(ref(db, `users/${ownerUid}/joys/${joyId}/groups/${groupId}`));
+    await this.syncSharedJoyAccess(joyId, ownerUid);
+  }
+
   private async getGroupTotalSpent(joyId: string, groupId: string, ownerUid?: string): Promise<number | null> {
     if (this.dataScopeService.isGuest()) {
       const joys = this.readGuestJoysRecord();
@@ -751,7 +790,8 @@ export class JoyService {
       icon: data.icon ?? iconInfo.icon,
       iconBg: data.iconBg ?? iconInfo.iconBg,
       iconColor: data.iconColor ?? iconInfo.iconColor,
-      createdBy: this.toCreator(data.createdBy) ?? fallbackCreator
+      createdBy: this.toCreator(data.createdBy) ?? fallbackCreator,
+      coverImage: data.coverImage
     };
   }
 

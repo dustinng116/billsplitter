@@ -12,6 +12,7 @@ import { JoyExpense, JoyGroup } from '../../types/joy.interface';
 import { JoyService } from '../../services/joy.service';
 import { TranslationService } from '../../services/translation.service';
 import { UserSessionService } from '../../services/user-session.service';
+import { ImageUploadService } from '../../services/image-upload.service';
 
 interface GroupExpense {
   id: string;
@@ -65,6 +66,7 @@ export class GroupDetailComponent implements OnChanges, OnDestroy {
     private readonly joyService: JoyService,
     private readonly translationService: TranslationService,
     private readonly userSessionService: UserSessionService,
+    private readonly imageUploadService: ImageUploadService,
     private readonly ngZone: NgZone,
     private readonly cdr: ChangeDetectorRef
   ) {
@@ -124,12 +126,55 @@ export class GroupDetailComponent implements OnChanges, OnDestroy {
     this.onExpenseClick(expense);
   }
 
+  isUploadingPhoto = false;
+
+  async onPhotoSelected(event: Event): Promise<void> {
+    const input = event.target as HTMLInputElement;
+    if (!input.files || input.files.length === 0 || !this.joyId || !this.groupId || !this.groupDetail) {
+      return;
+    }
+
+    const file = input.files[0];
+    try {
+      this.isUploadingPhoto = true;
+      this.cdr.detectChanges(); // spinner shows immediately
+      
+      const compressedFile = await this.imageUploadService.compressImage(file, 1600, 1600, 0.85);
+      const imageUrl = await this.imageUploadService.uploadImage(compressedFile);
+      
+      // Keep existing data, just update photo field
+      const updatedGroup = { ...this.groupDetail, photo: imageUrl };
+      
+      // The service expects Omit<JoyGroup, 'id'>, so we strip id
+      const { id, ...groupDataWithoutId } = updatedGroup;
+      
+      await this.joyService.updateJoyGroup(this.joyId, this.groupId, groupDataWithoutId);
+      
+      // Update local joy reference immediately for snappy UI
+      this.groupDetail.photo = imageUrl;
+    } catch (error) {
+      console.error('Upload failed', error);
+      alert(this.translationService.t('common.uploadError'));
+    } finally {
+      this.isUploadingPhoto = false;
+      input.value = ''; // Reset input
+      this.cdr.detectChanges();
+    }
+  }
+
   openAddExpenseDialog() {
     this.addExpenseDialog.open();
   }
 
   openGroupDetails(group: JoyGroup) {
     this.groupDetailsDialog.openForEdit(this.joyId, group);
+  }
+
+  onGroupUpdated(group: JoyGroup) {
+    if (this.groupId === group.id) {
+      this.groupDetail = { ...group };
+      this.cdr.detectChanges();
+    }
   }
 
   onExpenseAdded(expense: any) {

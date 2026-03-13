@@ -15,6 +15,7 @@ import { CommonPaginationComponent } from '../shared-common/common-pagination/co
 import { CommonDialogAction, CommonDialogService } from '../../services/common-dialog.service';
 import { TranslatePipe } from '../../pipes/translate.pipe';
 import { AvatarColorService } from '../../services/avatar-color.service';
+import { ImageUploadService } from '../../services/image-upload.service';
 import { JoyService } from '../../services/joy.service';
 import { ActivityService } from '../../services/activity.service';
 import { TranslationService } from '../../services/translation.service';
@@ -26,6 +27,7 @@ interface JoyForm {
   category: JoyCategory;
   startDate: string;
   endDate: string;
+  coverImage?: string;
 }
 
 @Component({
@@ -112,6 +114,7 @@ export class JoysTableComponent implements OnInit, OnDestroy {
     private readonly avatarColorService: AvatarColorService,
     private readonly translationService: TranslationService,
     private readonly userSessionService: UserSessionService,
+    private readonly imageUploadService: ImageUploadService,
     private readonly ngZone: NgZone,
     private readonly cdr: ChangeDetectorRef
   ) {}
@@ -166,7 +169,8 @@ export class JoysTableComponent implements OnInit, OnDestroy {
         status: 'Pending',
         icon: '',
         iconBg: '',
-        iconColor: ''
+        iconColor: '',
+        coverImage: this.joyForm.coverImage
       });
       await this.activityService.logActivity({
         type: 'create-joy',
@@ -178,7 +182,7 @@ export class JoysTableComponent implements OnInit, OnDestroy {
       this.commonDialogService.close();
     } catch (error) {
       console.error('Unable to create joy.', error);
-      this.dialogErrorMessage = 'Unable to create joy. Please try again.';
+      this.dialogErrorMessage = this.t('joys.createError');
     } finally {
       this.isSubmitting = false;
     }
@@ -199,7 +203,7 @@ export class JoysTableComponent implements OnInit, OnDestroy {
   }
 
   getCreatorName(joy: Joy): string {
-    return joy.createdBy?.name || joy.createdBy?.email || 'Guest';
+    return joy.createdBy?.name || joy.createdBy?.email || this.t('common.guest');
   }
 
   getCreatorInitials(joy: Joy): string {
@@ -228,7 +232,7 @@ export class JoysTableComponent implements OnInit, OnDestroy {
     this.loadingTimeoutId = setTimeout(() => {
       if (this.isLoading) {
         this.isLoading = false;
-        this.errorMessage = 'Connection timed out. Please check your network and Firebase rules, then refresh.';
+        this.errorMessage = this.t('joys.timeoutError');
         this.cdr.detectChanges();
       }
     }, 3000);
@@ -248,7 +252,7 @@ export class JoysTableComponent implements OnInit, OnDestroy {
         this.ngZone.run(() => {
           this.completeLoad(loadVersion, loadStartedAt, () => {
             console.error('Unable to load joys.', error);
-            this.errorMessage = 'Unable to load joys right now. Please refresh and try again.';
+            this.errorMessage = this.t('joys.loadError');
             this.isLoading = false;
             this.cdr.detectChanges();
           });
@@ -315,7 +319,34 @@ export class JoysTableComponent implements OnInit, OnDestroy {
 
   private createEmptyForm(): JoyForm {
     const today = new Date().toISOString().split('T')[0];
-    return { name: '', category: 'Others', startDate: today, endDate: today };
+    return { name: '', category: 'Others', startDate: today, endDate: today, coverImage: '' };
+  }
+
+  isUploadingCover = false;
+
+  async onCoverSelected(event: Event): Promise<void> {
+    const input = event.target as HTMLInputElement;
+    if (!input.files || input.files.length === 0) {
+      return;
+    }
+
+    const file = input.files[0];
+    try {
+      this.isUploadingCover = true;
+      this.cdr.detectChanges(); // spinner shows immediately
+      
+      const compressedFile = await this.imageUploadService.compressImage(file, 1600, 1600, 0.85); // main cover 
+      const imageUrl = await this.imageUploadService.uploadImage(compressedFile);
+      
+      this.joyForm.coverImage = imageUrl;
+    } catch (error) {
+      console.error('Upload failed', error);
+      alert(this.t('common.uploadError'));
+    } finally {
+      this.isUploadingCover = false;
+      input.value = ''; // Reset input
+      this.cdr.detectChanges();
+    }
   }
 
   private formatJoyDateRange(): string {
@@ -329,5 +360,12 @@ export class JoysTableComponent implements OnInit, OnDestroy {
   private ensureValidPage(): void {
     const totalPages = Math.max(1, Math.ceil(this.joys.length / this.pageSize));
     if (this.currentPage > totalPages) this.currentPage = totalPages;
+  }
+  getAvatarColorClasses(name: string): string {
+    return this.avatarColorService.getInitialAvatarClasses(name || this.t('joys.newJoy'));
+  }
+
+  getInitials(name: string): string {
+    return name?.trim() ? name.trim().charAt(0).toUpperCase() : '?';
   }
 }
