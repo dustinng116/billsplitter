@@ -200,7 +200,9 @@
 
                 <div class="flex shrink-0 items-center gap-2">
                   <!-- Add Expense Button -->
-                  <button type="button" (click)="openQuickAddExpense(group.id, $event)"
+                  <button type="button"
+                    (touchend)="onAddExpenseButtonTap(group.id, $event)"
+                    (click)="openQuickAddExpense(group.id, $event)"
                     class="inline-flex h-9 w-9 items-center justify-center rounded-full bg-primary text-white transition-colors hover:bg-primary/90 sm:h-auto sm:w-auto sm:gap-1 sm:rounded-lg sm:px-3 sm:py-2 sm:text-xs sm:font-bold"
                     [attr.aria-label]="'groupDetail.addExpense' | translate">
                     <span class="material-symbols-outlined text-[16px]">add_circle</span>
