@@ -2,6 +2,14 @@
 command = "npx ng build"
 publish = "dist/joy-splitter/browser"
 
+# Firebase auth helper endpoints (must come first)
+[[redirects]]
+  from = "/__/auth/*"
+  to = "https://split-bill-3e0d1.firebaseapp.com/__/auth/:splat"
+  status = 200
+  force = true
+
+# Angular SPA routing
 [[redirects]]
   from = "/*"
   to = "/index.html"
