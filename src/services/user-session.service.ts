@@ -7,11 +7,11 @@ import { Observable } from 'rxjs';
 export class UserSessionService {
   constructor(private auth: AuthService) {}
 
-  get user$(): Observable<User | null> {
+  get user$(): Observable<User | null> { 
     return this.auth.user$;
   }
 
-  signInWithGoogle() {
+  signInWithGoogle() { 
     return this.auth.signInWithGoogle();
   }
 

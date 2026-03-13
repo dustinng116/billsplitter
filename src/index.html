@@ -30,8 +30,6 @@
     <link rel="apple-touch-icon" href="assets/joys-splitter.png" />
     <meta name="theme-color" content="#135bec" />
 
-    <script src="https://accounts.google.com/gsi/client" async defer></script>
-
     <style>
       body {
         margin: 0;
@@ -198,72 +196,89 @@
         }
         translateSkip();
 
-        // Fade in icon/app name, show spinner, then show buttons after 2s (mobile/tablet only)
-        var isMobile = window.innerWidth < 1024;
-        if (isMobile) {
-          splashContent.style.opacity = 0;
-          splashActions.style.opacity = 0;
-          splashActions.style.display = "flex";
-          splashSpinner.style.display = "block";
-          setTimeout(function () {
+        var authResolved = false;
+        var authFallbackTimer = null;
+
+        function setSplashMode(mode) {
+          if (mode === "checking") {
             splashContent.style.opacity = 1;
-          }, 10);
-          setTimeout(function () {
+            splashSpinner.style.display = "block";
+            splashActions.style.opacity = 0;
+            splashActions.style.pointerEvents = "none";
+            return;
+          }
+
+          if (mode === "guest") {
+            splashContent.style.opacity = 1;
             splashSpinner.style.display = "none";
+            splashActions.style.display = "flex";
             splashActions.style.opacity = 1;
-          }, 2000);
-        } else {
-          splashContent.style.opacity = 1;
-          splashActions.style.display = "flex";
-          splashActions.style.opacity = 1;
-          splashSpinner.style.display = "none";
+            splashActions.style.pointerEvents = "auto";
+          }
         }
 
-        function renderFallbackBtn() {
+        setTimeout(function () {
+          splashContent.style.opacity = 1;
+        }, 10);
+        setSplashMode("checking");
+
+        function handleAuthState(event) {
+          var detail = event && event.detail ? event.detail : {};
+          if (!detail.isReady) return;
+
+          authResolved = true;
+          if (authFallbackTimer) {
+            clearTimeout(authFallbackTimer);
+            authFallbackTimer = null;
+          }
+
+          if (detail.isAuthenticated) {
+            hideSplash();
+            return;
+          }
+
+          setSplashMode("guest");
+        }
+
+        window.addEventListener("joys-auth-state", handleAuthState);
+
+        authFallbackTimer = setTimeout(function () {
+          if (!authResolved) {
+            setSplashMode("guest");
+          }
+        }, 4000);
+
+        function createSplashLoginButton() {
           if (googleBtnRendered) return;
           var btn = document.createElement("button");
-          btn.textContent = "Login with Google";
+          btn.type = "button";
+          btn.textContent = "Sign in with Google";
           btn.style =
             "background:#fff;color:#135bec;border:1px solid #135bec;border-radius:8px;padding:0.75rem 2rem;font-size:1rem;font-weight:600;cursor:pointer;box-shadow:0 2px 8px #135bec22;width:100%;max-width:260px;";
-          btn.onclick = hideSplash;
+          btn.onclick = function () {
+            var signIn = window.firebaseAuthSignInWithGoogle;
+            if (typeof signIn !== "function") {
+              console.warn("Firebase Google sign-in is not ready yet.");
+              return;
+            }
+
+            setSplashMode("checking");
+
+            Promise.resolve(signIn())
+              .then(function () {
+                // Popup sign-in resolves here. Redirect sign-in will reload and auth state will hide splash.
+              })
+              .catch(function (error) {
+                setSplashMode("guest");
+                console.error("Firebase Google login failed:", error);
+              });
+          };
           var container = document.getElementById("splash-google-btn");
           if (container) container.appendChild(btn);
           googleBtnRendered = true;
         }
 
-        function initGoogle() {
-          if (!window.google || !google.accounts || !google.accounts.id) {
-            setTimeout(initGoogle, 120);
-            return;
-          }
-          try {
-            const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
-            google.accounts.id.initialize({
-              client_id:
-                "45157459483-mdurood55e9vv5dpjqda8chv62fgvjdf.apps.googleusercontent.com",
-              callback: function (response) {
-                hideSplash();
-              },
-              ux_mode: "popup",
-            });
-            google.accounts.id.renderButton(
-              document.getElementById("splash-google-btn"),
-              {
-                theme: "outline",
-                size: "large",
-                width: 260,
-              }
-            );
-            googleBtnRendered = true;
-          } catch (e) {
-            console.warn("Google login failed", e);
-            renderFallbackBtn();
-          }
-        }
-
-        // Try to load Google login button, fallback after 3s
-        initGoogle();
-        setTimeout(renderFallbackBtn, 3000);
+        createSplashLoginButton();
 
         if (skipBtn) skipBtn.onclick = hideSplash;
       });
