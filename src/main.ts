@@ -8,6 +8,8 @@ import { NewGroupDialogComponent } from './components/new-group-dialog/new-group
 import { CommonDialogComponent } from './components/shared-common/common-dialog/common-dialog.component';
 import { TranslatePipe } from './pipes/translate.pipe';
 import { initializeFirebaseAnalytics } from './firebase';
+import { inject } from '@angular/core';
+import { AuthService } from './services/auth.service';
 
 @Component({
   selector: 'joys-root',
@@ -232,4 +234,8 @@ export class App {
 
 void initializeFirebaseAnalytics();
 
-bootstrapApplication(App);
+bootstrapApplication(App).then(() => {
+  // Expose AuthService to window for splash login
+  const authService = inject(AuthService);
+  AuthService.exposeToWindow(authService);
+});
