@@ -1,4 +1,5 @@
 <joys-overlay-loading [show]="globalLoading" [message]="'common.loading' | translate"></joys-overlay-loading>
+
 <!-- TOP OF THE TOP: Floating Refresh Indicator -->
 <div class="fixed inset-x-0 top-0 flex items-center justify-center pointer-events-none z-[10000]"
      style="padding-top: env(safe-area-inset-top, 0px);">
@@ -57,9 +58,12 @@
         <span class="material-symbols-outlined text-[22px]">add_circle</span>
       </button>
 
+
+      <!-- Liquid Glass Dock — Pure CSS frosted glass -->
       <nav class="liquid-glass-dock liquid-glass-entrance w-full"
-        [attr.aria-label]="'mobileNav.activities' | translate">
+           [attr.aria-label]="'mobileNav.activities' | translate">
         <div class="grid grid-cols-4 gap-1.5">
+
           <button type="button" (click)="onBottomNavigation('joys-table')" class="liquid-glass-item"
             [attr.data-active]="isBottomNavActive('joys')" [class]="getBottomNavItemClasses('joys')">
             <span class="material-symbols-outlined text-[22px] leading-none">auto_awesome</span>
