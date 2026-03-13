@@ -13,17 +13,17 @@ export class FriendService {
     return onValue(
       this.friendsReference,
       (snapshot) => {
-        console.log('[FriendService] snapshot received, exists:', snapshot.exists());
+        // console.log('[FriendService] snapshot received, exists:', snapshot.exists());
         if (!snapshot.exists()) {
           onFriendsChanged([]);
           return;
         }
         const friendsData = snapshot.val() as Record<string, Partial<Omit<Friend, 'id'>>>;
-        console.log('[FriendService] raw data keys:', Object.keys(friendsData));
+        // console.log('[FriendService] raw data keys:', Object.keys(friendsData));
         onFriendsChanged(this.sortFriends(this.mapFriendsRecord(friendsData)));
       },
       (error) => {
-        console.error('[FriendService] Firebase listener error:', error);
+        // console.error('[FriendService] Firebase listener error:', error);
         onFriendsChanged([]);
         onError(error);
       }
@@ -52,7 +52,7 @@ export class FriendService {
   }
 
   private mapFriendsRecord(friendsData: Record<string, Partial<Omit<Friend, 'id'>>>): Friend[] {
-    console.log('[FriendService] Mapping friends record, entries:', Object.entries(friendsData));
+    // console.log('[FriendService] Mapping friends record, entries:', Object.entries(friendsData));
     return Object.entries(friendsData).map(([id, data]) => ({
       id,
       name: data.name ?? 'Unknown Friend',

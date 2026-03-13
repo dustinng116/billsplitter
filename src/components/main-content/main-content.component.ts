@@ -1,4 +1,5 @@
 import { Component, EventEmitter, Output, ViewChild } from '@angular/core';
+import { AvatarColorService } from '../../services/avatar-color.service';
 import { UserSessionService } from '../../services/user-session.service';
 import { Observable } from 'rxjs';
 import { CommonModule } from '@angular/common';
@@ -56,23 +57,30 @@ type ViewType = 'dashboard' | 'group-detail' | 'joys-table' | 'friends' | 'activ
         <div class="mx-auto flex max-w-xl flex-col gap-4 pb-4">
           <section class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
             <div class="flex items-center gap-4" *ngIf="(user$ | async) as user; else guestBlock">
-              <img
-                [src]="user.photoURL || 'https://ui-avatars.com/api/?name=' + (user.displayName || user.email)"
-                [alt]="user.displayName || user.email"
-                class="h-16 w-16 rounded-full object-cover ring-2 ring-primary/20"
-              />
-              <div class="min-w-0">
-                <h2 class="truncate text-lg font-bold">{{ user.displayName || user.email }}</h2>
-                <p class="truncate text-sm text-slate-500 dark:text-slate-400">{{ user.email }}</p>
+              <ng-container *ngIf="hasUserAvatar(user); else userInitialBlock">
+                <img
+                  [src]="user.photoURL"
+                  [alt]="user.displayName || user.email"
+                  (error)="onUserAvatarError(user)"
+                  class="h-16 w-16 rounded-full object-cover ring-2 ring-primary/20"
+                />
+              </ng-container>
+              <ng-template #userInitialBlock>
+                <div class="h-16 w-16 rounded-full flex items-center justify-center text-xl font-bold ring-2 ring-primary/20"
+                  [ngClass]="getAvatarColorClasses(user.displayName || user.email)">
+                  {{ getInitials(user.displayName || user.email) }}
+                </div>
+              </ng-template>
+              <div class="min-w-0 flex-1">
+                <h2 class="truncate text-base font-bold">{{ user.displayName || user.email }}</h2>
+                <p class="truncate text-xs text-slate-500 dark:text-slate-400">{{ user.email }}</p>
               </div>
             </div>
             <ng-template #guestBlock>
               <div class="flex items-center gap-4">
-                <img
-                  src="https://ui-avatars.com/api/?name=Guest"
-                  alt="Guest"
-                  class="h-16 w-16 rounded-full object-cover ring-2 ring-primary/20"
-                />
+                <div class="h-16 w-16 rounded-full flex items-center justify-center text-2xl font-bold ring-2 ring-primary/20 bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300">
+                  GU
+                </div>
                 <div class="min-w-0">
                   <h2 class="truncate text-lg font-bold">Guest</h2>
                   <p class="truncate text-sm text-slate-500 dark:text-slate-400">Not signed in</p>
@@ -193,17 +201,13 @@ export class MainContentComponent {
   selectedJoyId: string = '';
   selectedGroupId: string = '';
   user$: Observable<any>;
+  private readonly brokenAvatarSeeds = new Set<string>();
 
   signInWithGoogleAccount() {
     if ((window as any).firebaseAuthSignInWithGoogle) {
-      (window as any).firebaseAuthSignInWithGoogle();
+      void (window as any).firebaseAuthSignInWithGoogle();
     } else {
-      const win = window as any;
-      if (win.google && win.google.accounts && win.google.accounts.id) {
-        try {
-          win.google.accounts.id.prompt();
-        } catch {}
-      }
+      void this.userSession.signInWithGoogle();
     }
   }
 
@@ -212,9 +216,46 @@ export class MainContentComponent {
     private readonly currencyService: CurrencyService,
     private readonly themeService: ThemeService,
     private readonly activityService: ActivityService,
-    private readonly userSession: UserSessionService
+    private readonly userSession: UserSessionService,
+    private readonly avatarColorService: AvatarColorService
   ) {
     this.user$ = this.userSession.user$;
+    this.user$.subscribe(user => {
+      if (user) {
+        console.log('Logged in user profile:', user);
+      }
+    });
+  }
+
+  getAvatarColorClasses(seed?: string | null): string {
+    return this.avatarColorService.getInitialAvatarClasses(seed ?? 'guest-user');
+  }
+
+  getInitials(name?: string | null): string {
+    return (name ?? '')
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part[0]?.toUpperCase() ?? '')
+      .join('') || 'GU';
+  }
+
+  hasUserAvatar(user: any): boolean {
+    const avatarUrl = user?.photoURL?.trim?.() ?? '';
+    if (!avatarUrl) {
+      return false;
+    }
+
+    return !this.brokenAvatarSeeds.has(this.getAvatarSeed(user));
+  }
+
+  onUserAvatarError(user: any): void {
+    this.brokenAvatarSeeds.add(this.getAvatarSeed(user));
+  }
+
+  private getAvatarSeed(user: any): string {
+    return String(user?.uid || user?.email || user?.displayName || 'guest-user');
   }
 
   onGroupClicked(groupId: any) {
