@@ -1,6 +1,7 @@
 import { Component, ViewChild } from "@angular/core";
 import { bootstrapApplication } from "@angular/platform-browser";
 import { CommonModule } from "@angular/common";
+import { OverlayLoadingComponent } from "./components/shared-common/overlay-loading/overlay-loading.component";
 import { HeaderComponent } from "./components/header/header.component";
 import { SidebarComponent } from "./components/sidebar/sidebar.component";
 import { MainContentComponent } from "./components/main-content/main-content.component";
@@ -21,8 +22,10 @@ import { AuthService } from "./services/auth.service";
     NewGroupDialogComponent,
     CommonDialogComponent,
     TranslatePipe,
+    OverlayLoadingComponent,
   ],
   template: `
+    <joys-overlay-loading [show]="globalLoading" message="Loading..."></joys-overlay-loading>
     <div
       class="relative flex h-[100dvh] w-screen overflow-hidden bg-slate-50 dark:bg-background-dark"
     >
@@ -172,6 +175,7 @@ import { AuthService } from "./services/auth.service";
   `,
 })
 export class App {
+  globalLoading = false;
   private touchStartX: number | null = null;
   private touchStartY: number | null = null;
   private touchStartTime: number | null = null;
@@ -233,7 +237,19 @@ export class App {
   }
 
   onNavigationChanged(route: string) {
-    this.mainContent.onNavigationChanged(route);
+    // Show overlay loading if navigating from joys-table to dashboard
+    const from = this.mainContent?.currentView;
+    if (from === 'joys-table' && route === 'dashboard') {
+      this.globalLoading = true;
+      setTimeout(() => {
+        this.mainContent.onNavigationChanged(route);
+        setTimeout(() => {
+          this.globalLoading = false;
+        }, 500);
+      }, 0);
+    } else {
+      this.mainContent.onNavigationChanged(route);
+    }
   }
 
   onCreateGroupClicked(joyId = "") {
