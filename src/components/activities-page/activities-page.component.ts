@@ -118,7 +118,7 @@ export class ActivitiesPageComponent implements OnInit, OnDestroy {
         this.ngZone.run(() => {
           if (currentLoad !== this.loadVersion) return;
           console.error('Unable to load activities.', error);
-          this.errorMessage = 'Unable to load activities right now. Please refresh and try again.';
+          this.errorMessage = this.translationService.t('activities.loadError');
           this.isLoading = false;
           this.cdr.detectChanges();
         });

@@ -113,6 +113,10 @@ export class App {
     this.newGroupDialog.open(selectedJoyId);
   }
 
+  onEditGroupClicked(event: { joyId: string; group: any }) {
+    this.newGroupDialog.openForEdit(event.joyId, event.group);
+  }
+
   onGroupCreated(group: any) {
     console.log("New group created:", group);
     // Intentionally left TODOs for business logic: add group to list, show message, navigate

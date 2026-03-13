@@ -17,6 +17,7 @@ export interface Joy {
   iconBg: string;
   iconColor: string;
   createdBy?: JoyCreator;
+  coverImage?: string;
 }
 
 export type JoyCategory =

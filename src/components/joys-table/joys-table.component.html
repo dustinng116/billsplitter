@@ -150,29 +150,60 @@
 
     <!-- Create Joy Dialog Template -->
     <ng-template #createJoyDialog>
-      <div class="space-y-4">
-        <div class="flex flex-col gap-2">
-          <label class="text-sm font-semibold text-slate-700 dark:text-slate-300">Joy Name</label>
-          <input
-            [(ngModel)]="joyForm.name"
-            [disabled]="isSubmitting"
-            type="text"
-            placeholder="e.g., Beach Trip"
-            class="w-full rounded-xl border-transparent bg-slate-50 px-4 py-3 outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary/20 dark:bg-slate-800 dark:text-slate-100"
-          />
-        </div>
-        <div class="flex flex-wrap gap-2.5">
-            <button
-              *ngFor="let cat of categories"
-              type="button"
-              (click)="joyForm.category = cat"
-              [disabled]="isSubmitting"
-              [class]="getCreateJoyCategoryClasses(cat)"
+      <div class="space-y-6">
+        <!-- Cover Image Upload -->
+        <section class="flex flex-col items-center gap-3">
+          <div class="relative group">
+            <input type="file" #createCoverUpload class="hidden" accept="image/*" (change)="onCoverSelected($event)" />
+            <div (click)="createCoverUpload.click()"
+              class="h-24 w-24 rounded-full border-4 border-slate-50 dark:border-slate-800 bg-center bg-cover flex items-center justify-center overflow-hidden cursor-pointer shadow-sm transition-all hover:scale-105"
+              [ngClass]="joyForm.coverImage ? '' : getAvatarColorClasses(joyForm.name)"
+              [style.background-image]="joyForm.coverImage ? 'url(' + joyForm.coverImage + ')' : ''"
             >
-              <span class="material-symbols-outlined text-[18px]">{{ getCategoryIcon(cat) }}</span>
-              <span>{{ getCategoryLabel(cat) }}</span>
-            </button>
+              <!-- Initial or Photo Placeholder -->
+              <span *ngIf="!joyForm.coverImage && !isUploadingCover" class="text-3xl font-bold text-white uppercase drop-shadow-sm">
+                {{ getInitials(joyForm.name) }}
+              </span>
+
+              <div class="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity">
+                <span *ngIf="isUploadingCover" class="material-symbols-outlined text-white text-3xl animate-spin">progress_activity</span>
+                <span *ngIf="!isUploadingCover" class="material-symbols-outlined text-white text-3xl">{{ joyForm.coverImage ? 'edit' : 'photo_camera' }}</span>
+              </div>
+            </div>
+            <div class="absolute bottom-0 right-0 h-6 w-6 rounded-full bg-primary flex items-center justify-center text-white border-2 border-white dark:border-slate-900 shadow-sm pointer-events-none">
+              <span class="material-symbols-outlined text-sm">edit</span>
+            </div>
           </div>
+          <div class="text-center">
+            <p class="text-sm font-bold text-slate-900 dark:text-white">{{ "dashboard.coverImage" | translate }}</p>
+            <p class="text-[11px] text-slate-500 dark:text-slate-400">{{ "joys.photoHint" | translate }}</p>
+          </div>
+        </section>
+
+        <div class="space-y-4">
+          <div class="flex flex-col gap-2">
+            <label class="text-sm font-semibold text-slate-700 dark:text-slate-300">{{ "joys.joyName" | translate }}</label>
+            <input
+              [(ngModel)]="joyForm.name"
+              [disabled]="isSubmitting"
+              type="text"
+              [placeholder]="'joys.placeholderName' | translate"
+              class="w-full rounded-xl border-transparent bg-slate-50 px-4 py-3 outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary/20 dark:bg-slate-800 dark:text-slate-100"
+            />
+          </div>
+          <div class="flex flex-wrap gap-2.5">
+              <button
+                *ngFor="let cat of categories"
+                type="button"
+                (click)="joyForm.category = cat"
+                [disabled]="isSubmitting"
+                [class]="getCreateJoyCategoryClasses(cat)"
+              >
+                <span class="material-symbols-outlined text-[18px]">{{ getCategoryIcon(cat) }}</span>
+                <span>{{ getCategoryLabel(cat) }}</span>
+              </button>
+          </div>
+        </div>
         <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div class="flex flex-col gap-2">
             <label class="text-sm font-semibold text-slate-700 dark:text-slate-300">{{ 'common.startDate' | translate }}</label>

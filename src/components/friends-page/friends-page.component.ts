@@ -144,7 +144,7 @@ export class FriendsPageComponent implements OnInit, OnDestroy {
     }
 
     if (this.hasDuplicateEmail()) {
-      this.dialogErrorMessage = 'A friend with this email already exists.';
+      this.dialogErrorMessage = this.t('friends.duplicateEmail');
       return;
     }
 
@@ -165,7 +165,7 @@ export class FriendsPageComponent implements OnInit, OnDestroy {
       this.commonDialogService.close();
     } catch (error) {
       console.error('Unable to add friend.', error);
-      this.dialogErrorMessage = 'Unable to add friend right now. Please try again.';
+      this.dialogErrorMessage = this.t('friends.addError');
     } finally {
       this.isSubmitting = false;
     }
@@ -192,7 +192,7 @@ export class FriendsPageComponent implements OnInit, OnDestroy {
       this.commonDialogService.close();
     } catch (error) {
       console.error('Unable to delete friend.', error);
-      this.dialogErrorMessage = 'Unable to delete friend right now. Please try again.';
+      this.dialogErrorMessage = this.t('friends.deleteError');
     } finally {
       this.isDeleting = false;
     }
@@ -416,7 +416,7 @@ export class FriendsPageComponent implements OnInit, OnDestroy {
     this.loadingTimeoutId = setTimeout(() => {
       if (this.isLoading) {
         this.isLoading = false;
-        this.errorMessage = 'Connection timed out. Please check your network and Firebase rules, then refresh.';
+        this.errorMessage = this.t('joys.timeoutError');
         this.cdr.detectChanges();
       }
     }, 3000);
@@ -436,7 +436,7 @@ export class FriendsPageComponent implements OnInit, OnDestroy {
         this.ngZone.run(() => {
           this.completeLoad(loadVersion, loadStartedAt, () => {
             console.error('Unable to load friends.', error);
-            this.errorMessage = 'Unable to load friends right now. Please refresh and try again.';
+            this.errorMessage = this.t('friends.loadError');
             this.isLoading = false;
             this.cdr.detectChanges();
           });

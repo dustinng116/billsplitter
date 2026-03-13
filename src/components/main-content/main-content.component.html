@@ -8,20 +8,25 @@
           class="material-symbols-outlined animate-spin text-5xl text-primary"
           >progress_activity</span
         >
-        <span class="mt-2 text-white text-sm font-medium">Loading...</span>
+        <span class="mt-2 text-white text-sm font-medium">{{ "common.loading" | translate }}</span>
       </div>
     </div>
     <div class="relative w-full h-full overflow-hidden bg-slate-200 dark:bg-slate-800">
-      <!-- The Refresh Indicator Behind Main -->
-      <div class="absolute inset-x-0 top-0 flex flex-col items-center justify-center pointer-events-none text-slate-500 dark:text-slate-400"
-           [style.height.px]="pullTriggerDistance"
-           style="padding-top: env(safe-area-inset-top, 0px);"
-           [style.opacity]="pullRefreshOpacity">
-        <span class="material-symbols-outlined text-[24px]" [class.animate-spin]="isPullRefreshing">
-          {{ isPullRefreshing ? 'progress_activity' : (pullDistance >= pullTriggerDistance ? 'autorenew' : 'south') }}
-        </span>
+      <!-- TOP OF THE TOP: Floating Refresh Indicator -->
+      <div class="fixed inset-x-0 top-0 flex items-center justify-center pointer-events-none z-[9999]"
+           style="padding-top: env(safe-area-inset-top, 0px);">
+        <div *ngIf="showPullRefreshIndicator"
+             class="mt-4 flex h-11 w-11 items-center justify-center rounded-full bg-white dark:bg-slate-800 shadow-xl border border-slate-100 dark:border-slate-700 transition-all duration-150"
+             [style.opacity]="pullRefreshOpacity"
+             [style.transform]="'translateY(' + (pullDistance - 20) + 'px) rotate(' + (pullDistance * 4) + 'deg) scale(' + (pullDistance >= pullTriggerDistance ? 1.1 : 1) + ')'"
+             [class.border-emerald-500]="pullDistance >= pullTriggerDistance && !isPullRefreshing"
+             [class.text-emerald-500]="pullDistance >= pullTriggerDistance && !isPullRefreshing"
+             [class.text-primary]="pullDistance < pullTriggerDistance || isPullRefreshing">
+          <span class="material-symbols-outlined text-[24px]" [class.animate-spin]="isPullRefreshing">
+            {{ isPullRefreshing ? 'progress_activity' : (pullDistance >= pullTriggerDistance ? 'check_circle' : 'refresh') }}
+          </span>
+        </div>
       </div>
-
       <main
         class="h-full overflow-y-auto bg-slate-50 dark:bg-background-dark w-full relative z-10"
         style="overscroll-behavior-y: none; padding-bottom:calc(env(safe-area-inset-bottom,0px) + 6rem);padding-top:env(safe-area-inset-top,0px);padding-left:env(safe-area-inset-left,0px);padding-right:env(safe-area-inset-right,0px);"
@@ -36,6 +41,7 @@
           [joyId]="selectedJoyId"
           (groupClicked)="onGroupClicked($event)"
           (newGroupClicked)="onDashboardNewGroupClicked($event)"
+          (editGroupClicked)="onEditGroupClicked($event)"
           (backToJoysClicked)="onDashboardBackToJoys()"
           (dataLoaded)="onDashboardDataLoaded()"
         ></joys-dashboard>
@@ -115,11 +121,11 @@
                   GU
                 </div>
                 <div class="min-w-0">
-                  <h2 class="truncate text-lg font-bold">Guest</h2>
+                  <h2 class="truncate text-lg font-bold">{{ "common.guest" | translate }}</h2>
                   <p
                     class="truncate text-sm text-slate-500 dark:text-slate-400"
                   >
-                    Not signed in
+                    {{ "common.notSignedIn" | translate }}
                   </p>
                 </div>
               </div>
@@ -293,9 +299,9 @@
               </span>
               <span>
                 <ng-container *ngIf="isSyncingGuestData; else syncGuestDataText"
-                  >Syncing...</ng-container
+                  >{{ "common.syncing" | translate }}</ng-container
                 >
-                <ng-template #syncGuestDataText>Sync guest data</ng-template>
+                <ng-template #syncGuestDataText>{{ "common.syncGuestData" | translate }}</ng-template>
               </span>
             </button>
             <button
@@ -315,7 +321,7 @@
               style="width:100%"
             >
               <span class="material-symbols-outlined text-[18px]">login</span>
-              <span>Sign in with Google</span>
+              <span>{{ "common.signInWithGoogle" | translate }}</span>
             </button>
           </ng-template>
           <p class="px-1 text-center text-xs text-slate-400">

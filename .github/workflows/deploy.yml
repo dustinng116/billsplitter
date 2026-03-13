@@ -51,7 +51,8 @@ jobs:
               appId: '${{ secrets.FIREBASE_APP_ID }}',
               measurementId: '${{ secrets.FIREBASE_MEASUREMENT_ID }}',
               databaseURL: '${{ secrets.FIREBASE_DATABASE_URL }}'
-            }
+            },
+            imgbbApiKey: '${{ secrets.IMGBB_API_KEY }}'
           };
           EOF
 

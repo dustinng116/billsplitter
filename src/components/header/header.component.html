@@ -56,18 +56,18 @@
             (click)="toggleUserMenu($event)"
             [attr.aria-expanded]="userMenuOpen"
             [attr.aria-label]="'header.userProfile' | translate"
-            [title]="user?.displayName || user?.email || 'Guest'"
+            [title]="user?.displayName || user?.email || ('common.guest' | translate)"
           >
             <img
               *ngIf="hasUserAvatar(user); else avatarFallback"
               [src]="user.photoURL"
-              [alt]="user?.displayName || user?.email || 'Guest'"
+              [alt]="user?.displayName || user?.email || ('common.guest' | translate)"
               (error)="onUserAvatarError(user)"
               class="h-full w-full object-cover"
             />
             <ng-template #avatarFallback>
-              <span class="flex h-full w-full items-center justify-center text-sm font-bold" [ngClass]="getAvatarColorClasses(user?.displayName || user?.email || 'Guest')">
-                {{ getUserInitials(user?.displayName || user?.email || 'Guest') }}
+              <span class="flex h-full w-full items-center justify-center text-sm font-bold" [ngClass]="getAvatarColorClasses(user?.displayName || user?.email || ('common.guest' | translate))">
+                {{ getUserInitials(user?.displayName || user?.email || ('common.guest' | translate)) }}
               </span>
             </ng-template>
           </button>
@@ -78,21 +78,21 @@
           >
             <div class="border-b border-slate-100 px-6 py-5 dark:border-slate-800">
               <div class="flex flex-col items-center gap-3 text-center">
-                <div class="flex h-20 w-20 items-center justify-center overflow-hidden rounded-full" [ngClass]="getAvatarColorClasses(user?.displayName || user?.email || 'Guest')">
+                <div class="flex h-20 w-20 items-center justify-center overflow-hidden rounded-full" [ngClass]="getAvatarColorClasses(user?.displayName || user?.email || ('common.guest' | translate))">
                   <img
                     *ngIf="hasUserAvatar(user); else cardAvatarFallback"
                     [src]="user.photoURL"
-                    [alt]="user?.displayName || user?.email || 'Guest'"
+                    [alt]="user?.displayName || user?.email || ('common.guest' | translate)"
                     (error)="onUserAvatarError(user)"
                     class="h-full w-full object-cover"
                   />
                   <ng-template #cardAvatarFallback>
-                    <span class="text-2xl font-bold">{{ getUserInitials(user?.displayName || user?.email || 'Guest') }}</span>
+                    <span class="text-2xl font-bold">{{ getUserInitials(user?.displayName || user?.email || ('common.guest' | translate)) }}</span>
                   </ng-template>
                 </div>
                 <div>
                   <p class="text-lg font-semibold text-slate-900 dark:text-slate-100">
-                    {{ user?.displayName || user?.email || 'Guest' }}
+                    {{ user?.displayName || user?.email || ('common.guest' | translate) }}
                   </p>
                   <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
                     {{ user?.email || ('header.offlineMode' | translate) }}
