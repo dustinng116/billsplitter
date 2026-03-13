@@ -2,14 +2,52 @@ import { Injectable } from '@angular/core';
 import { get, onValue, push, ref, remove, set, update, type Unsubscribe } from 'firebase/database';
 import { db } from '../firebase';
 import { CategoryStyle, Joy, JoyCategory, JoyExpense, JoyGroup, JoyStatus, StatusStyle } from '../types/joy.interface';
+import { DataScopeService } from './data-scope.service';
+import { GuestStorageService } from './guest-storage.service';
 
 @Injectable({
   providedIn: 'root'
 })
 export class JoyService {
-  private readonly joysReference = ref(db, 'joys');
+  constructor(
+    private readonly dataScopeService: DataScopeService,
+    private readonly guestStorageService: GuestStorageService
+  ) {}
+
+  private get joysReference() {
+    return ref(db, this.dataScopeService.getScopedPath('joys'));
+  }
+
+  private get guestJoysKey(): string {
+    return this.dataScopeService.getGuestStorageKey('joys');
+  }
+
+  private readGuestJoysRecord(): Record<string, any> {
+    return this.guestStorageService.readRecord<any>(this.guestJoysKey);
+  }
+
+  private writeGuestJoysRecord(record: Record<string, any>): void {
+    this.guestStorageService.writeRecord(this.guestJoysKey, record);
+  }
 
   listenToJoys(onJoysChanged: (joys: Joy[]) => void, onError: (error: unknown) => void): Unsubscribe {
+    if (this.dataScopeService.isGuest()) {
+      const emitJoys = () => {
+        const joysData = this.readGuestJoysRecord();
+        const joys = Object.entries(joysData)
+          .map(([joyId, joyData]) => this.mapJoyDocument(joyId, joyData as Partial<Omit<Joy, 'id'>>))
+          .sort((a, b) => b.date.localeCompare(a.date));
+        onJoysChanged(joys);
+      };
+
+      void this.guestStorageService.fakeApiDelay().then(emitJoys).catch(onError);
+      const unsubscribeGuest = this.guestStorageService.subscribeKey(this.guestJoysKey, emitJoys);
+
+      return () => {
+        unsubscribeGuest();
+      };
+    }
+
     return onValue(
       this.joysReference,
       (snapshot) => {
@@ -31,8 +69,27 @@ export class JoyService {
   }
 
   listenToJoy(joyId: string, onJoyChanged: (joy: Joy | null) => void, onError: (error: unknown) => void): Unsubscribe {
+    if (this.dataScopeService.isGuest()) {
+      const emitJoy = () => {
+        const joys = this.readGuestJoysRecord();
+        const joyData = joys[joyId];
+        if (!joyData) {
+          onJoyChanged(null);
+          return;
+        }
+        onJoyChanged(this.mapJoyDocument(joyId, joyData as Partial<Omit<Joy, 'id'>>));
+      };
+
+      void this.guestStorageService.fakeApiDelay().then(emitJoy).catch(onError);
+      const unsubscribeGuest = this.guestStorageService.subscribeKey(this.guestJoysKey, emitJoy);
+
+      return () => {
+        unsubscribeGuest();
+      };
+    }
+
     return onValue(
-      ref(db, `joys/${joyId}`),
+      ref(db, `${this.dataScopeService.getScopedPath('joys')}/${joyId}`),
       (snapshot) => {
         if (!snapshot.exists()) {
           onJoyChanged(null);
@@ -46,7 +103,6 @@ export class JoyService {
   }
 
   async addJoy(joyData: Omit<Joy, 'id'>): Promise<Joy> {
-    const joyRef = push(this.joysReference);
     const payload = {
       joyName: joyData.joyName,
       category: joyData.category,
@@ -55,6 +111,17 @@ export class JoyService {
       yourShare: joyData.yourShare,
       status: joyData.status
     };
+
+    if (this.dataScopeService.isGuest()) {
+      await this.guestStorageService.fakeApiDelay();
+      const joys = this.readGuestJoysRecord();
+      const id = crypto.randomUUID();
+      joys[id] = payload;
+      this.writeGuestJoysRecord(joys);
+      return { id, ...joyData };
+    }
+
+    const joyRef = push(this.joysReference);
     await set(joyRef, payload);
     return { id: joyRef.key ?? crypto.randomUUID(), ...joyData };
   }
@@ -73,7 +140,30 @@ export class JoyService {
       iconColor: iconInfo.iconColor
     };
 
-    await update(ref(db, `joys/${joyId}`), payload);
+    if (this.dataScopeService.isGuest()) {
+      await this.guestStorageService.fakeApiDelay();
+      const joys = this.readGuestJoysRecord();
+      joys[joyId] = {
+        ...(joys[joyId] ?? {}),
+        ...payload
+      };
+      this.writeGuestJoysRecord(joys);
+
+      return {
+        id: joyId,
+        joyName: joyData.joyName,
+        category: joyData.category,
+        date: joyData.date,
+        totalAmount: 0,
+        yourShare: 0,
+        status: 'Pending',
+        icon: iconInfo.icon,
+        iconBg: iconInfo.iconBg,
+        iconColor: iconInfo.iconColor
+      };
+    }
+
+    await update(ref(db, `${this.dataScopeService.getScopedPath('joys')}/${joyId}`), payload);
 
     return {
       id: joyId,
@@ -90,12 +180,42 @@ export class JoyService {
   }
 
   async deleteJoy(joyId: string): Promise<void> {
-    await remove(ref(db, `joys/${joyId}`));
+    if (this.dataScopeService.isGuest()) {
+      await this.guestStorageService.fakeApiDelay();
+      const joys = this.readGuestJoysRecord();
+      delete joys[joyId];
+      this.writeGuestJoysRecord(joys);
+      return;
+    }
+
+    await remove(ref(db, `${this.dataScopeService.getScopedPath('joys')}/${joyId}`));
   }
 
   listenToJoyGroups(joyId: string, onGroupsChanged: (groups: JoyGroup[]) => void, onError: (error: unknown) => void): Unsubscribe {
+    if (this.dataScopeService.isGuest()) {
+      const emitGroups = () => {
+        const joys = this.readGuestJoysRecord();
+        const groupsData = joys[joyId]?.groups as Record<string, Omit<JoyGroup, 'id'>> | undefined;
+        if (!groupsData) {
+          onGroupsChanged([]);
+          return;
+        }
+        const groups = Object.entries(groupsData)
+          .map(([id, value]) => ({ id, ...value }))
+          .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+        onGroupsChanged(groups);
+      };
+
+      void this.guestStorageService.fakeApiDelay().then(emitGroups).catch(onError);
+      const unsubscribeGuest = this.guestStorageService.subscribeKey(this.guestJoysKey, emitGroups);
+
+      return () => {
+        unsubscribeGuest();
+      };
+    }
+
     return onValue(
-      ref(db, `joys/${joyId}/groups`),
+      ref(db, `${this.dataScopeService.getScopedPath('joys')}/${joyId}/groups`),
       (snapshot) => {
         if (!snapshot.exists()) {
           onGroupsChanged([]);
@@ -117,8 +237,27 @@ export class JoyService {
     onGroupChanged: (group: JoyGroup | null) => void,
     onError: (error: unknown) => void
   ): Unsubscribe {
+    if (this.dataScopeService.isGuest()) {
+      const emitGroup = () => {
+        const joys = this.readGuestJoysRecord();
+        const groupData = joys[joyId]?.groups?.[groupId] as Omit<JoyGroup, 'id'> | undefined;
+        if (!groupData) {
+          onGroupChanged(null);
+          return;
+        }
+        onGroupChanged({ id: groupId, ...groupData });
+      };
+
+      void this.guestStorageService.fakeApiDelay().then(emitGroup).catch(onError);
+      const unsubscribeGuest = this.guestStorageService.subscribeKey(this.guestJoysKey, emitGroup);
+
+      return () => {
+        unsubscribeGuest();
+      };
+    }
+
     return onValue(
-      ref(db, `joys/${joyId}/groups/${groupId}`),
+      ref(db, `${this.dataScopeService.getScopedPath('joys')}/${joyId}/groups/${groupId}`),
       (snapshot) => {
         if (!snapshot.exists()) {
           onGroupChanged(null);
@@ -132,13 +271,41 @@ export class JoyService {
   }
 
   async addGroupToJoy(joyId: string, groupData: Omit<JoyGroup, 'id'>): Promise<JoyGroup> {
-    const groupRef = push(ref(db, `joys/${joyId}/groups`));
+    if (this.dataScopeService.isGuest()) {
+      await this.guestStorageService.fakeApiDelay();
+      const joys = this.readGuestJoysRecord();
+      const joyData = joys[joyId] ?? {};
+      const groups = joyData.groups ?? {};
+      const id = crypto.randomUUID();
+      groups[id] = groupData;
+      joyData.groups = groups;
+      joys[joyId] = joyData;
+      this.writeGuestJoysRecord(joys);
+      return { id, ...groupData };
+    }
+
+    const groupRef = push(ref(db, `${this.dataScopeService.getScopedPath('joys')}/${joyId}/groups`));
     await set(groupRef, groupData);
     return { id: groupRef.key ?? crypto.randomUUID(), ...groupData };
   }
 
   async updateJoyGroup(joyId: string, groupId: string, groupData: Omit<JoyGroup, 'id'>): Promise<JoyGroup> {
-    await update(ref(db, `joys/${joyId}/groups/${groupId}`), groupData);
+    if (this.dataScopeService.isGuest()) {
+      await this.guestStorageService.fakeApiDelay();
+      const joys = this.readGuestJoysRecord();
+      const joyData = joys[joyId] ?? {};
+      const groups = joyData.groups ?? {};
+      groups[groupId] = {
+        ...(groups[groupId] ?? {}),
+        ...groupData
+      };
+      joyData.groups = groups;
+      joys[joyId] = joyData;
+      this.writeGuestJoysRecord(joys);
+      return { id: groupId, ...groupData };
+    }
+
+    await update(ref(db, `${this.dataScopeService.getScopedPath('joys')}/${joyId}/groups/${groupId}`), groupData);
     return { id: groupId, ...groupData };
   }
 
@@ -148,8 +315,30 @@ export class JoyService {
     onExpensesChanged: (expenses: JoyExpense[]) => void,
     onError: (error: unknown) => void
   ): Unsubscribe {
+    if (this.dataScopeService.isGuest()) {
+      const emitExpenses = () => {
+        const joys = this.readGuestJoysRecord();
+        const expensesData = joys[joyId]?.groups?.[groupId]?.expenses as Record<string, Omit<JoyExpense, 'id'>> | undefined;
+        if (!expensesData) {
+          onExpensesChanged([]);
+          return;
+        }
+        const expenses = Object.entries(expensesData)
+          .map(([id, value]) => ({ id, ...value }))
+          .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+        onExpensesChanged(expenses);
+      };
+
+      void this.guestStorageService.fakeApiDelay().then(emitExpenses).catch(onError);
+      const unsubscribeGuest = this.guestStorageService.subscribeKey(this.guestJoysKey, emitExpenses);
+
+      return () => {
+        unsubscribeGuest();
+      };
+    }
+
     return onValue(
-      ref(db, `joys/${joyId}/groups/${groupId}/expenses`),
+      ref(db, `${this.dataScopeService.getScopedPath('joys')}/${joyId}/groups/${groupId}/expenses`),
       (snapshot) => {
         if (!snapshot.exists()) {
           onExpensesChanged([]);
@@ -171,10 +360,35 @@ export class JoyService {
     expenseData: Omit<JoyExpense, 'id' | 'createdAt'>
   ): Promise<JoyExpense> {
     const createdAt = new Date().toISOString();
-    const expenseRef = push(ref(db, `joys/${joyId}/groups/${groupId}/expenses`));
+
+    if (this.dataScopeService.isGuest()) {
+      await this.guestStorageService.fakeApiDelay();
+      const joys = this.readGuestJoysRecord();
+      const joyData = joys[joyId] ?? {};
+      const groups = joyData.groups ?? {};
+      const group = groups[groupId] ?? {};
+      const expenses = group.expenses ?? {};
+      const id = crypto.randomUUID();
+      expenses[id] = { ...expenseData, createdAt };
+      group.expenses = expenses;
+      const currentTotal = typeof group.totalSpent === 'number' ? group.totalSpent : 0;
+      group.totalSpent = currentTotal + expenseData.amount;
+      groups[groupId] = group;
+      joyData.groups = groups;
+      joys[joyId] = joyData;
+      this.writeGuestJoysRecord(joys);
+
+      return {
+        id,
+        ...expenseData,
+        createdAt
+      };
+    }
+
+    const expenseRef = push(ref(db, `${this.dataScopeService.getScopedPath('joys')}/${joyId}/groups/${groupId}/expenses`));
     await set(expenseRef, { ...expenseData, createdAt });
 
-    const groupRef = ref(db, `joys/${joyId}/groups/${groupId}`);
+    const groupRef = ref(db, `${this.dataScopeService.getScopedPath('joys')}/${joyId}/groups/${groupId}`);
     const currentTotal = (await this.getGroupTotalSpent(joyId, groupId)) ?? 0;
     await update(groupRef, { totalSpent: currentTotal + expenseData.amount });
 
@@ -191,16 +405,38 @@ export class JoyService {
     expenseId: string,
     expenseAmount: number
   ): Promise<void> {
-    await remove(ref(db, `joys/${joyId}/groups/${groupId}/expenses/${expenseId}`));
+    if (this.dataScopeService.isGuest()) {
+      await this.guestStorageService.fakeApiDelay();
+      const joys = this.readGuestJoysRecord();
+      const group = joys[joyId]?.groups?.[groupId];
+      if (group?.expenses?.[expenseId]) {
+        delete group.expenses[expenseId];
+      }
+      const currentTotal = typeof group?.totalSpent === 'number' ? group.totalSpent : 0;
+      const nextTotal = Math.max(0, currentTotal - expenseAmount);
+      if (group) {
+        group.totalSpent = nextTotal;
+      }
+      this.writeGuestJoysRecord(joys);
+      return;
+    }
 
-    const groupRef = ref(db, `joys/${joyId}/groups/${groupId}`);
+    await remove(ref(db, `${this.dataScopeService.getScopedPath('joys')}/${joyId}/groups/${groupId}/expenses/${expenseId}`));
+
+    const groupRef = ref(db, `${this.dataScopeService.getScopedPath('joys')}/${joyId}/groups/${groupId}`);
     const currentTotal = (await this.getGroupTotalSpent(joyId, groupId)) ?? 0;
     const nextTotal = Math.max(0, currentTotal - expenseAmount);
     await update(groupRef, { totalSpent: nextTotal });
   }
 
   private async getGroupTotalSpent(joyId: string, groupId: string): Promise<number | null> {
-    const snapshot = await get(ref(db, `joys/${joyId}/groups/${groupId}/totalSpent`));
+    if (this.dataScopeService.isGuest()) {
+      const joys = this.readGuestJoysRecord();
+      const total = joys[joyId]?.groups?.[groupId]?.totalSpent;
+      return typeof total === 'number' ? total : 0;
+    }
+
+    const snapshot = await get(ref(db, `${this.dataScopeService.getScopedPath('joys')}/${joyId}/groups/${groupId}/totalSpent`));
     return typeof snapshot.val() === 'number' ? snapshot.val() : 0;
   }
 

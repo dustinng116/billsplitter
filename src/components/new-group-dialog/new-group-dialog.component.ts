@@ -250,6 +250,8 @@ export class NewGroupDialogComponent implements OnInit, OnDestroy {
 
   filteredMembers: GroupMember[] = [];
   private unsubscribeFriends: Unsubscribe | null = null;
+  private unsubscribeDirectoryUsers: Unsubscribe | null = null;
+  private directoryMembers: GroupMember[] = [];
 
   get showMemberChips(): boolean {
     return this.availableMembers.length > 0 && this.availableMembers.length < 10;
@@ -279,6 +281,8 @@ export class NewGroupDialogComponent implements OnInit, OnDestroy {
   ngOnDestroy(): void {
     this.unsubscribeFriends?.();
     this.unsubscribeFriends = null;
+    this.unsubscribeDirectoryUsers?.();
+    this.unsubscribeDirectoryUsers = null;
   }
 
   initializeForm() {
@@ -560,11 +564,13 @@ export class NewGroupDialogComponent implements OnInit, OnDestroy {
   private listenToFriendSuggestions(): void {
     this.areFriendsLoading = true;
     this.unsubscribeFriends?.();
+    this.unsubscribeDirectoryUsers?.();
 
     this.unsubscribeFriends = this.friendService.listenToFriends(
       (friends) => {
         this.ngZone.run(() => {
-          this.availableMembers = friends.map((friend) => this.toGroupMember(friend));
+          const friendMembers = friends.map((friend) => this.toGroupMember(friend));
+          this.availableMembers = this.mergeMembers(friendMembers, this.directoryMembers);
           this.areFriendsLoading = false;
           if (this.memberSearchQuery.trim()) {
             this.onMemberSearch();
@@ -582,6 +588,54 @@ export class NewGroupDialogComponent implements OnInit, OnDestroy {
         });
       }
     );
+
+    this.unsubscribeDirectoryUsers = this.friendService.listenToDirectoryUsers(
+      (users) => {
+        this.ngZone.run(() => {
+          this.directoryMembers = users
+            .filter((user) => !!user.email)
+            .map((user) => ({
+              id: user.uid,
+              name: user.displayName || user.email,
+              email: user.email,
+              phone: user.phone || undefined,
+              avatar: user.avatar || undefined,
+              initials: this.getInitials(user.displayName || user.email)
+            }));
+
+          const friendMembers = this.availableMembers.filter((member) => member.id !== 'current-user');
+          this.availableMembers = this.mergeMembers(friendMembers, this.directoryMembers);
+          if (this.memberSearchQuery.trim()) {
+            this.onMemberSearch();
+          }
+          this.cdr.detectChanges();
+        });
+      },
+      (error) => {
+        this.ngZone.run(() => {
+          console.error('Unable to load user directory for autocomplete.', error);
+          this.cdr.detectChanges();
+        });
+      }
+    );
+  }
+
+  private mergeMembers(primary: GroupMember[], secondary: GroupMember[]): GroupMember[] {
+    const merged = new Map<string, GroupMember>();
+    const pushMember = (member: GroupMember) => {
+      const key = member.email.trim().toLowerCase() || member.id;
+      if (!key) {
+        return;
+      }
+
+      if (!merged.has(key)) {
+        merged.set(key, member);
+      }
+    };
+
+    primary.forEach(pushMember);
+    secondary.forEach(pushMember);
+    return Array.from(merged.values());
   }
 
   private toGroupMember(friend: Friend): GroupMember {
@@ -590,6 +644,7 @@ export class NewGroupDialogComponent implements OnInit, OnDestroy {
       name: friend.name,
       email: friend.email,
       phone: friend.phone || undefined,
+      avatar: friend.avatar || undefined,
       initials: this.getInitials(friend.name)
     };
   }

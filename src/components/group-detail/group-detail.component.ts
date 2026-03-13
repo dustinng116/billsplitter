@@ -288,6 +288,7 @@ const MOBILE_SWIPE_ACTION_WIDTH = 88;
   `
 })
 export class GroupDetailComponent implements OnChanges, OnDestroy {
+  @Output() dataLoaded = new EventEmitter<void>();
   @Input() joyId: string = '';
   @Input() groupId: string = '';
   @Output() backClicked = new EventEmitter<void>();
@@ -563,6 +564,7 @@ export class GroupDetailComponent implements OnChanges, OnDestroy {
           this.groupDetail = group;
           this.isLoading = false;
           this.cdr.detectChanges();
+          this.dataLoaded.emit();
         });
       },
       (error) => {

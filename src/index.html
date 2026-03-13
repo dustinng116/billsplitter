@@ -141,6 +141,33 @@
       #splash-skip-btn:hover {
         background: #f0f6ff;
       }
+
+      #top-toast {
+        position: fixed;
+        top: calc(env(safe-area-inset-top, 0px) + 12px);
+        left: 50%;
+        transform: translateX(-50%) translateY(-20px);
+        z-index: 10001;
+        min-width: 240px;
+        max-width: min(92vw, 540px);
+        padding: 12px 14px;
+        border-radius: 10px;
+        background: #fee2e2;
+        color: #991b1b;
+        border: 1px solid #fca5a5;
+        font-size: 14px;
+        font-weight: 600;
+        box-shadow: 0 10px 24px rgba(15, 23, 42, 0.18);
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.25s ease, transform 0.25s ease;
+        text-align: center;
+      }
+
+      #top-toast.show {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0);
+      }
     </style>
   </head>
 
@@ -166,6 +193,8 @@
       </div>
     </div>
 
+    <div id="top-toast" role="alert" aria-live="assertive"></div>
+
     <joys-root>Loading...</joys-root>
 
     <script>
@@ -183,6 +212,20 @@
         var splashSpinner = document.getElementById("splash-spinner");
         var splashActions = document.getElementById("splash-actions");
         var skipBtn = document.getElementById("splash-skip-btn");
+        var topToast = document.getElementById("top-toast");
+        var toastTimer = null;
+
+        function showToast(message) {
+          if (!topToast) return;
+          topToast.textContent = message || "Sign in failed. Please try again.";
+          topToast.classList.add("show");
+          if (toastTimer) clearTimeout(toastTimer);
+          toastTimer = setTimeout(function () {
+            topToast.classList.remove("show");
+          }, 3200);
+        }
+
+        window.joysShowToast = showToast;
 
         // i18n for skip button
         function translateSkip() {
@@ -222,8 +265,7 @@
         }, 10);
         setSplashMode("checking");
 
-        function handleAuthState(event) {
-          var detail = event && event.detail ? event.detail : {};
+        function applyAuthState(detail) {
           if (!detail.isReady) return;
 
           authResolved = true;
@@ -240,13 +282,41 @@
           setSplashMode("guest");
         }
 
+        function handleAuthState(event) {
+          var detail = event && event.detail ? event.detail : {};
+          applyAuthState(detail);
+        }
+
+        window.joysHandleAuthState = applyAuthState;
+
         window.addEventListener("joys-auth-state", handleAuthState);
+        window.addEventListener("joys-auth-error", function (event) {
+          var detail = event && event.detail ? event.detail : {};
+          showToast(detail.message || "Sign in failed. Please try again.");
+          setSplashMode("guest");
+        });
+        window.joysHandleAuthError = function (message) {
+          showToast(message || "Sign in failed. Please try again.");
+          setSplashMode("guest");
+        };
+
+        if (window.__joysAuthState) {
+          applyAuthState(window.__joysAuthState);
+        }
+
+        if (window.__joysAuthError) {
+          showToast(window.__joysAuthError);
+          window.__joysAuthError = null;
+        }
+
+        var wasAuthenticated = localStorage.getItem("joys:auth:was-authenticated") === "1";
+        var fallbackDelay = wasAuthenticated ? 12000 : 4000;
 
         authFallbackTimer = setTimeout(function () {
           if (!authResolved) {
             setSplashMode("guest");
           }
-        }, 4000);
+        }, fallbackDelay);
 
         function createSplashLoginButton() {
           if (googleBtnRendered) return;
@@ -266,11 +336,15 @@
 
             Promise.resolve(signIn())
               .then(function () {
-                // Popup sign-in resolves here. Redirect sign-in will reload and auth state will hide splash.
+                // Popup sign-in resolves here. Redirect sign-in reloads and auth state hides splash.
+                if (!/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || "")) {
+                  hideSplash();
+                }
               })
               .catch(function (error) {
                 setSplashMode("guest");
                 console.error("Firebase Google login failed:", error);
+                showToast((error && error.message) || "Sign in failed. Please try again.");
               });
           };
           var container = document.getElementById("splash-google-btn");

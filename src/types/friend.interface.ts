@@ -3,6 +3,7 @@ export interface Friend {
   name: string;
   email: string;
   phone: string;
+  avatar?: string;
 }
 
 export interface FriendForm {
