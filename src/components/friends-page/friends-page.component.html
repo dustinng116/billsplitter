@@ -1,0 +1,281 @@
+<div class="p-4 lg:p-8 w-full">
+      <div class="flex flex-col gap-8 w-full">
+
+        <!-- Mobile header: action row + title below (matches dashboard / group-detail) -->
+        <header class="md:hidden pb-0">
+          <div class="flex items-center justify-end mb-2"> 
+          </div>
+          <h1 class="text-3xl font-black leading-tight tracking-tight text-slate-900 dark:text-white">{{ 'friends.title' | translate }}</h1>
+          <p class="mt-1 max-w-lg text-base leading-relaxed text-slate-500 dark:text-slate-400">{{ 'friends.subtitle' | translate }}</p>
+        </header>
+
+        <!-- Desktop header: title left, full button right -->
+        <div class="hidden md:flex flex-row items-end justify-between gap-4">
+          <div class="flex flex-col gap-2">
+            <h1 class="text-3xl font-black leading-tight tracking-tight text-slate-900 dark:text-white">{{ 'friends.title' | translate }}</h1>
+            <p class="max-w-lg text-base leading-relaxed text-slate-500 dark:text-slate-400">{{ 'friends.subtitle' | translate }}</p>
+          </div>
+          <button
+            type="button"
+            (click)="openAddFriendDialog()"
+            [disabled]="isLoading"
+            class="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-primary px-5 py-2.5 text-sm font-bold text-white shadow-lg shadow-primary/20 transition-all hover:bg-primary/90"
+          >
+            <span class="material-symbols-outlined text-[18px]">person_add</span>
+            <span>{{ 'friends.add' | translate }}</span>
+          </button>
+        </div>
+
+        <div *ngIf="errorMessage" class="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600 dark:border-red-900/50 dark:bg-red-900/20 dark:text-red-300">
+          {{ errorMessage }}
+        </div>
+
+        <joys-common-table
+          [data]="pagedFriends"
+          [isLoading]="isLoading"
+          [loadingText]="t('friends.loading')"
+          [displayedColumns]="displayedColumns"
+          [rowClass]="'transition-all hover:bg-slate-50 dark:hover:bg-slate-800/50'"
+          [emptyText]="t('friends.empty')"
+        >
+          <ng-container appColumnDef="name">
+            <ng-template appHeaderCellDef>{{ 'friends.name' | translate }}</ng-template>
+            <ng-template appCellDef let-friend>
+              <div *ngIf="editingFriendId !== friend.id" class="flex items-center gap-3">
+                <div class="flex h-10 w-10 items-center justify-center rounded-full text-sm font-bold" [ngClass]="getAvatarColorClasses(friend.name)">
+                  {{ getInitials(friend.name) }}
+                </div>
+                <span class="font-semibold text-slate-900 dark:text-slate-100">{{ friend.name }}</span>
+              </div>
+              <input *ngIf="editingFriendId === friend.id"
+                [(ngModel)]="editForm.name"
+                type="text"
+                placeholder="Full name"
+                class="w-full min-w-[140px] rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-900 outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary/20 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+              />
+            </ng-template>
+          </ng-container>
+
+          <ng-container appColumnDef="email" cellClass="text-sm text-slate-600 dark:text-slate-300">
+            <ng-template appHeaderCellDef>{{ 'friends.email' | translate }}</ng-template>
+            <ng-template appCellDef let-friend>
+              <span *ngIf="editingFriendId !== friend.id">{{ friend.email }}</span>
+              <input *ngIf="editingFriendId === friend.id"
+                [(ngModel)]="editForm.email"
+                type="email"
+                placeholder="name@email.com"
+                class="w-full min-w-[160px] rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary/20 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+              />
+            </ng-template>
+          </ng-container>
+
+          <ng-container appColumnDef="phone" cellClass="text-sm text-slate-500 dark:text-slate-400 whitespace-nowrap">
+            <ng-template appHeaderCellDef>{{ 'friends.phone' | translate }}</ng-template>
+            <ng-template appCellDef let-friend>
+              <span *ngIf="editingFriendId !== friend.id">{{ friend.phone }}</span>
+              <input *ngIf="editingFriendId === friend.id"
+                [(ngModel)]="editForm.phone"
+                (ngModelChange)="onEditPhoneInput($event)"
+                type="tel"
+                inputmode="numeric"
+                pattern="[0-9]*"
+                placeholder="0123456789"
+                class="w-full min-w-[130px] rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary/20 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+              />
+            </ng-template>
+          </ng-container>
+
+          <ng-container appColumnDef="action" headerClass="w-28 text-right" cellClass="text-right">
+            <ng-template appHeaderCellDef></ng-template>
+            <ng-template appCellDef let-friend>
+              <div *ngIf="editingFriendId !== friend.id" class="flex items-center justify-end gap-1">
+                <button
+                  type="button"
+                  (click)="startEdit(friend)"
+                  class="inline-flex h-10 w-10 items-center justify-center rounded-full text-slate-400 transition-colors hover:bg-primary/10 hover:text-primary dark:hover:bg-primary/20"
+                  [attr.aria-label]="'Edit ' + friend.name"
+                  [title]="'friends.editFriend' | translate"
+                >
+                  <span class="material-symbols-outlined text-lg">edit</span>
+                </button>
+                <button
+                  type="button"
+                  (click)="openDeleteFriendDialog(friend)"
+                  class="inline-flex h-10 w-10 items-center justify-center rounded-full text-slate-400 transition-colors hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-900/20 dark:hover:text-red-400"
+                  [attr.aria-label]="'Delete ' + friend.name"
+                  [title]="'friends.deleteFriend' | translate"
+                >
+                  <span class="material-symbols-outlined text-lg">close</span>
+                </button>
+              </div>
+              <div *ngIf="editingFriendId === friend.id" class="flex items-center justify-end gap-1">
+                <button
+                  type="button"
+                  (click)="saveEdit(friend)"
+                  [disabled]="isSaving"
+                  class="inline-flex h-10 w-10 items-center justify-center rounded-full text-slate-400 transition-colors hover:bg-emerald-50 hover:text-emerald-600 disabled:opacity-50 dark:hover:bg-emerald-900/20 dark:hover:text-emerald-400"
+                  [title]="'friends.saveChanges' | translate"
+                >
+                  <span class="material-symbols-outlined text-lg" [class.animate-spin]="isSaving">{{ isSaving ? 'progress_activity' : 'check' }}</span>
+                </button>
+                <button
+                  type="button"
+                  (click)="cancelEdit()"
+                  [disabled]="isSaving"
+                  class="inline-flex h-10 w-10 items-center justify-center rounded-full text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 disabled:opacity-50 dark:hover:bg-slate-700"
+                  [title]="'friends.cancel' | translate"
+                >
+                  <span class="material-symbols-outlined text-lg">close</span>
+                </button>
+              </div>
+            </ng-template>
+          </ng-container>
+
+          <ng-template appMobileRowDef let-friend>
+            <div class="relative overflow-hidden rounded-lg border bg-white shadow-sm transition-all dark:bg-slate-900"
+              [class]="editingFriendId === friend.id ? 'border-primary ring-2 ring-primary/20 dark:border-primary' : 'border-slate-100 dark:border-slate-800'">
+              <button
+                *ngIf="editingFriendId !== friend.id"
+                type="button"
+                (click)="openDeleteFriendDialog(friend)"
+                class="absolute inset-y-0 right-0 flex w-[88px] items-center justify-center bg-red-500 text-white transition-all duration-200 hover:bg-red-600"
+                [style.opacity]="getSwipeDeleteOpacity(friend.id)"
+                [style.transform]="getSwipeDeleteTransform(friend.id)"
+                [class.pointer-events-none]="!isSwipeDeleteActionEnabled(friend.id)"
+                [attr.aria-label]="'Delete ' + friend.name"
+              >
+                <span class="material-symbols-outlined text-base">delete</span>
+              </button>
+
+              <div
+                class="relative z-10 p-3 transition-transform duration-200 ease-out"
+                [style.transform]="getSwipeTransform(friend.id)"
+                (click)="onMobileFriendCardClick(friend)"
+                (touchstart)="onFriendTouchStart(friend.id, $event)"
+                (touchmove)="onFriendTouchMove(friend.id, $event)"
+                (touchend)="onFriendTouchEnd(friend.id)"
+                (touchcancel)="onFriendTouchCancel()"
+              >
+              <ng-container *ngIf="editingFriendId !== friend.id">
+                <div class="flex items-start justify-between gap-2.5">
+                  <div class="flex min-w-0 items-start gap-2.5">
+                    <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[11px] font-bold" [ngClass]="getAvatarColorClasses(friend.name)">
+                      {{ getInitials(friend.name) }}
+                    </div>
+                    <div class="min-w-0 space-y-0.5">
+                      <div class="truncate text-sm font-semibold text-slate-900 dark:text-slate-100">{{ friend.name }}</div>
+                      <div class="truncate text-xs text-slate-600 dark:text-slate-300">{{ friend.email }}</div>
+                      <div class="truncate text-xs text-slate-500 dark:text-slate-400">{{ friend.phone }}</div>
+                    </div>
+                  </div>
+                  <div class="flex shrink-0 items-center gap-0.5">
+                    <button type="button" (click)="startEdit(friend); $event.stopPropagation()"
+                      class="inline-flex h-8 w-8 items-center justify-center rounded-full text-slate-400 transition-colors hover:bg-primary/10 hover:text-primary dark:hover:bg-primary/20">
+                      <span class="material-symbols-outlined text-base">edit</span>
+                    </button>
+                  </div>
+                </div>
+              </ng-container>
+              <ng-container *ngIf="editingFriendId === friend.id">
+                <div class="space-y-2">
+                  <input [(ngModel)]="editForm.name" type="text" placeholder="Full name"
+                    class="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary/20 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100" />
+                  <input [(ngModel)]="editForm.email" type="email" placeholder="name@email.com"
+                    class="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary/20 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100" />
+                  <input [(ngModel)]="editForm.phone" (ngModelChange)="onEditPhoneInput($event)" type="tel" inputmode="numeric" pattern="[0-9]*" placeholder="0123456789"
+                    class="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary/20 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100" />
+                  <div class="flex justify-end gap-1.5 pt-1">
+                    <button type="button" (click)="cancelEdit(); $event.stopPropagation()" [disabled]="isSaving"
+                      class="flex h-8 items-center gap-1 rounded-lg border border-slate-200 px-2.5 text-[11px] font-semibold text-slate-600 transition-colors hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:text-slate-300">
+                      <span class="material-symbols-outlined text-sm">close</span> {{ 'friends.cancel' | translate }}
+                    </button>
+                    <button type="button" (click)="saveEdit(friend, $event)" [disabled]="isSaving"
+                      class="flex h-8 items-center gap-1 rounded-lg bg-primary px-2.5 text-[11px] font-semibold text-white transition-colors hover:bg-primary/90 disabled:opacity-50">
+                      <span class="material-symbols-outlined text-sm" [class.animate-spin]="isSaving">{{ isSaving ? 'progress_activity' : 'check' }}</span>
+                      {{ isSaving ? ('friends.saving' | translate) : ('friends.save' | translate) }}
+                    </button>
+                  </div>
+                </div>
+              </ng-container>
+              </div>
+            </div>
+          </ng-template>
+
+          <ng-template appNoDataDef>
+            <div class="flex flex-col items-center gap-2">
+              <span class="material-symbols-outlined text-3xl text-slate-300 dark:text-slate-600">group_off</span>
+              <p class="font-medium text-slate-500 dark:text-slate-400">{{ 'friends.noData' | translate }}</p>
+            </div>
+          </ng-template>
+
+          <div pagination>
+            <joys-common-pagination
+              [page]="currentPage"
+              [pageSize]="pageSize"
+              [totalItems]="friends.length"
+              itemLabel="friends"
+              (pageChange)="onPageChange($event)"
+            ></joys-common-pagination>
+          </div>
+        </joys-common-table>
+      </div>
+
+    </div>
+
+    <ng-template #addFriendDialog>
+      <div class="space-y-6">
+        <div class="grid gap-4">
+          <div class="flex flex-col gap-2">
+            <label class="text-sm font-semibold text-slate-700 dark:text-slate-300">{{ 'friends.name' | translate }}</label>
+            <input
+              [(ngModel)]="friendForm.name"
+              [disabled]="isSubmitting"
+              type="text"
+              placeholder="e.g., Sarah Miller"
+              class="w-full rounded-xl border-transparent bg-slate-50 px-4 py-3 outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary/20 dark:bg-slate-800"
+            />
+          </div>
+
+          <div class="flex flex-col gap-2">
+            <label class="text-sm font-semibold text-slate-700 dark:text-slate-300">{{ 'friends.email' | translate }}</label>
+            <input
+              [(ngModel)]="friendForm.email"
+              [disabled]="isSubmitting"
+              type="email"
+              placeholder="name@email.com"
+              class="w-full rounded-xl border-transparent bg-slate-50 px-4 py-3 outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary/20 dark:bg-slate-800"
+            />
+          </div>
+
+          <div class="flex flex-col gap-2">
+            <label class="text-sm font-semibold text-slate-700 dark:text-slate-300">{{ 'friends.phone' | translate }}</label>
+            <input
+              [(ngModel)]="friendForm.phone"
+              (ngModelChange)="onFriendPhoneInput($event)"
+              [disabled]="isSubmitting"
+              type="tel"
+              inputmode="numeric"
+              pattern="[0-9]*"
+              placeholder="0123456789"
+              class="w-full rounded-xl border-transparent bg-slate-50 px-4 py-3 outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary/20 dark:bg-slate-800"
+            />
+          </div>
+        </div>
+
+        <p *ngIf="dialogErrorMessage" class="text-sm text-red-600 dark:text-red-300">{{ dialogErrorMessage }}</p>
+      </div>
+    </ng-template>
+
+    <ng-template #deleteFriendDialog>
+      <div class="space-y-4">
+        <p class="text-base text-slate-600 dark:text-slate-300">
+          {{ 'friends.removePromptPrefix' | translate }} <span class="font-semibold text-slate-900 dark:text-slate-100">{{ pendingDeleteFriend?.name }}</span> {{ 'friends.removePromptSuffix' | translate }}
+        </p>
+        <div *ngIf="pendingDeleteFriend" class="rounded-xl bg-slate-50 p-4 text-sm dark:bg-slate-800">
+          <div class="font-semibold text-slate-900 dark:text-slate-100">{{ pendingDeleteFriend.name }}</div>
+          <div class="text-slate-600 dark:text-slate-300">{{ pendingDeleteFriend.email }}</div>
+          <div class="text-slate-500 dark:text-slate-400">{{ pendingDeleteFriend.phone }}</div>
+        </div>
+        <p *ngIf="dialogErrorMessage" class="text-sm text-red-600 dark:text-red-300">{{ dialogErrorMessage }}</p>
+      </div>
+    </ng-template>

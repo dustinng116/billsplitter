@@ -2,35 +2,11 @@ import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { CommonModule } from '@angular/common';
 
 @Component({
+  styleUrl: './common-pagination.component.scss',
   selector: 'joys-common-pagination',
   standalone: true,
   imports: [CommonModule],
-  template: `
-    <div class="flex w-full items-center gap-3 sm:gap-4">
-      <p class="mr-auto text-xs font-medium text-slate-500 dark:text-slate-400">
-        {{ summaryText }}
-      </p>
-
-      <div class="flex gap-2">
-        <button
-          type="button"
-          class="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-600 disabled:opacity-50 dark:border-slate-700 dark:text-slate-400"
-          [disabled]="page <= 1"
-          (click)="goToPrevious()"
-        >
-          Previous
-        </button>
-        <button
-          type="button"
-          class="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800"
-          [disabled]="page >= totalPages"
-          (click)="goToNext()"
-        >
-          Next
-        </button>
-      </div>
-    </div>
-  `
+  templateUrl: './common-pagination.component.html'
 })
 export class CommonPaginationComponent {
   @Input() page = 1;

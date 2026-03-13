@@ -24,8 +24,8 @@ export class AppRouteService {
 
     const initialState = this.resolveRoute(this.getBrowserPath());
     this.stateSubject.next(initialState);
-    if (window.location.pathname !== initialState.path) {
-      window.history.replaceState({}, '', initialState.path);
+    if (window.location.pathname !== this.getFullPath(initialState.path)) {
+      window.history.replaceState({}, '', this.getFullPath(initialState.path));
     }
 
     window.addEventListener('popstate', this.handlePopState);
@@ -82,7 +82,7 @@ export class AppRouteService {
     }
 
     if (typeof window !== 'undefined') {
-      window.history.pushState({}, '', nextState.path);
+      window.history.pushState({}, '', this.getFullPath(nextState.path));
     }
 
     this.stateSubject.next(nextState);
@@ -93,7 +93,34 @@ export class AppRouteService {
       return '/joys';
     }
 
-    return window.location.pathname || '/joys';
+    const pathname = window.location.pathname || '/';
+    const basePath = this.getBasePath();
+    
+    // Strip the basePath from the beginning of the pathname if it exists
+    if (basePath !== '/' && pathname.startsWith(basePath)) {
+      const stripped = pathname.substring(basePath.length);
+      return stripped.startsWith('/') ? stripped : '/' + stripped;
+    }
+    
+    return pathname;
+  }
+  
+  private getBasePath(): string {
+    if (typeof document === 'undefined') return '/';
+    const baseElement = document.querySelector('base');
+    let href = baseElement ? baseElement.getAttribute('href') : '/';
+    if (!href) href = '/';
+    return href.endsWith('/') && href.length > 1 ? href.slice(0, -1) : href;
+  }
+  
+  private getFullPath(appPath: string): string {
+    const basePath = this.getBasePath();
+    if (basePath === '/') return appPath;
+    
+    // Join basePath and appPath cleanly
+    const cleanBase = basePath;
+    const cleanApp = appPath.startsWith('/') ? appPath : '/' + appPath;
+    return cleanBase + cleanApp;
   }
 
   private resolveRoute(pathname: string): AppRouteState {
