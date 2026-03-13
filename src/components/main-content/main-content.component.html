@@ -11,24 +11,24 @@
         <span class="mt-2 text-white text-sm font-medium">Loading...</span>
       </div>
     </div>
-    <main
-      class="h-full overflow-y-auto bg-slate-50 dark:bg-background-dark w-full"
-      style="padding-bottom:calc(env(safe-area-inset-bottom,0px) + 6rem);padding-top:env(safe-area-inset-top,0px);padding-left:env(safe-area-inset-left,0px);padding-right:env(safe-area-inset-right,0px);"
-    >
-      <div
-        *ngIf="showPullRefreshIndicator"
-        class="pointer-events-none fixed left-1/2 z-[60] flex -translate-x-1/2 items-center justify-center rounded-full bg-white/90 p-2 shadow-sm ring-1 ring-slate-200 dark:bg-slate-900/90 dark:ring-slate-700 lg:hidden"
-        [style.top]="'calc(env(safe-area-inset-top, 0px) + 8px)'"
-        [style.opacity]="pullRefreshOpacity"
-        [style.transform]="'translate(-50%, ' + pullRefreshTranslateY + 'px)'"
-      >
-        <span
-          class="material-symbols-outlined text-[20px] text-primary"
-          [class.animate-spin]="isPullRefreshing"
-        >
-          {{ isPullRefreshing ? "progress_activity" : "refresh" }}
+    <div class="relative w-full h-full overflow-hidden bg-slate-200 dark:bg-slate-800">
+      <!-- The Refresh Indicator Behind Main -->
+      <div class="absolute inset-x-0 top-0 flex flex-col items-center justify-center pointer-events-none text-slate-500 dark:text-slate-400"
+           [style.height.px]="pullTriggerDistance"
+           style="padding-top: env(safe-area-inset-top, 0px);"
+           [style.opacity]="pullRefreshOpacity">
+        <span class="material-symbols-outlined text-[24px]" [class.animate-spin]="isPullRefreshing">
+          {{ isPullRefreshing ? 'progress_activity' : (pullDistance >= pullTriggerDistance ? 'autorenew' : 'south') }}
         </span>
       </div>
+
+      <main
+        class="h-full overflow-y-auto bg-slate-50 dark:bg-background-dark w-full relative z-10"
+        style="overscroll-behavior-y: none; padding-bottom:calc(env(safe-area-inset-bottom,0px) + 6rem);padding-top:env(safe-area-inset-top,0px);padding-left:env(safe-area-inset-left,0px);padding-right:env(safe-area-inset-right,0px);"
+        [style.transform]="mainTransform"
+        [class.transition-transform]="!isPulling"
+        [class.duration-300]="!isPulling"
+      >
 
       <!-- Dashboard View -->
       <div *ngIf="currentView === 'dashboard'" class="w-full page-fade-in">
@@ -324,3 +324,4 @@
         </div>
       </section>
     </main>
+  </div>

@@ -36,6 +36,10 @@
       font-family: Inter, sans-serif;
     }
 
+    html.dark {
+      background-color: #101622;
+    }
+
     #splash-screen {
       position: fixed;
       z-index: 9999;
@@ -175,7 +179,51 @@
       opacity: 1;
       transform: translateX(-50%) translateY(0);
     }
+
+    /* Dark Mode Splash Screen Support */
+    html.dark #splash-screen {
+      background: #101622;
+    }
+    
+    html.dark .splash-title {
+      color: #8db5ff;
+    }
+    
+    html.dark .splash-desc {
+      color: #94a3b8;
+    }
+    
+    html.dark .splash-spinner {
+      border-color: #334155;
+      border-top-color: #38bdf8;
+    }
+    
+    html.dark #splash-skip-btn {
+      background: #1e293b;
+      color: #8db5ff;
+      border-color: rgba(141, 181, 255, 0.5);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+    }
+    
+    html.dark #splash-skip-btn:hover {
+      background: #334155;
+    }
   </style>
+
+  <script>
+    (function() {
+      try {
+        var mode = localStorage.getItem('splitbills_theme_mode');
+        var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        if (mode === 'dark' || (mode === 'system' && prefersDark)) {
+          document.documentElement.classList.add('dark');
+        } else if (!mode && prefersDark) {
+          // If no setting, default to light but respect system if we want (currently default is light though, let's strictly follow the angular app logic which defaults to light unless specified or system)
+          // Actually Angular app defaults to light. Let's strictly follow:
+        }
+      } catch (e) {}
+    })();
+  </script>
 </head>
 
 <body>
