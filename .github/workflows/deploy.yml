@@ -58,6 +58,9 @@ jobs:
       - name: Build project
         run: npx ng build --configuration production --base-href "/${{ github.event.repository.name }}/"
 
+      - name: Add GitHub Pages 404 fallback
+        run: cp dist/joys-splitter/browser/index.html dist/joys-splitter/browser/404.html
+
       - name: Add GitHub Pages marker
         run: touch dist/joys-splitter/browser/.nojekyll
 
