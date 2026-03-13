@@ -671,6 +671,23 @@ export class DashboardComponent implements OnChanges, OnDestroy {
     this.quickAddExpenseDialog.open();
   }
 
+  /**
+   * Dedicated touchend handler for the "Add Expense" button inside the swipe card.
+   * On real iOS, we can't rely on (click) firing after a touch sequence on a child
+   * element whose parent has touch listeners. So we handle the tap directly here:
+   * stop propagation (so parent onGroupTouchEnd doesn't run), reset swipe state,
+   * and call the action immediately.
+   */
+  onAddExpenseButtonTap(groupId: string, event: TouchEvent): void {
+    event.stopPropagation();   // prevent parent div's onGroupTouchEnd
+    event.preventDefault();    // prevent the synthetic click that follows touchend
+    // Reset any swipe state so the group card snaps back cleanly
+    this.draggingGroupId = '';
+    this.isMovementDetected = false;
+    this.currentSwipeOffset = 0;
+    this.openQuickAddExpense(groupId, event);
+  }
+
   openJoyConfigDialog(): void {
     if (!this.selectedJoy) {
       return;
