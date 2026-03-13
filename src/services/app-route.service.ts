@@ -106,16 +106,15 @@ export class AppRouteService {
   }
   
   private getBasePath(): string {
-    if (typeof document === 'undefined') return '/';
+    if (typeof document === 'undefined') return '/joys-splitter/';
     const baseElement = document.querySelector('base');
-    let href = baseElement ? baseElement.getAttribute('href') : '/';
-    if (!href) href = '/';
+    let href = baseElement ? baseElement.getAttribute('href') : '/joys-splitter/';
+    if (!href || href === '/') href = '/joys-splitter/';
     return href.endsWith('/') && href.length > 1 ? href.slice(0, -1) : href;
   }
   
   private getFullPath(appPath: string): string {
     const basePath = this.getBasePath();
-    if (basePath === '/') return appPath;
     
     // Join basePath and appPath cleanly
     const cleanBase = basePath;
