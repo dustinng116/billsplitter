@@ -43,7 +43,7 @@ export class SidebarComponent implements OnChanges, OnInit {
   constructor(
     private readonly themeService: ThemeService,
     private readonly translationService: TranslationService
-  ) {}
+  ) { }
 
   ngOnChanges(changes: SimpleChanges): void {
     if (changes['collapsed']) {
