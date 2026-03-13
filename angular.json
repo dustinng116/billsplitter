@@ -31,7 +31,8 @@
           },
           "options": {
             "assets": [
-              "src/assets"
+              "src/assets",
+              "src/manifest.webmanifest"
             ],
             "index": "src/index.html",
             "browser": "src/main.ts",
