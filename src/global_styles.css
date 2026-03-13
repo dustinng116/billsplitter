@@ -284,7 +284,7 @@ body {
 
 /* Active pill — glass bead look, not flat white */
 .liquid-glass-item-active {
-  color: #b8960a;
+  color: #135bec;
   border-color: rgba(19, 91, 236, 0.20);
   /* Semi-transparent frosted glass pill — NOT opaque white */
   background:
