@@ -72,27 +72,23 @@ export class App {
   }
 
   private readonly onTouchStart = (e: TouchEvent) => {
-    if (globalThis.window.innerWidth >= 1024) return; // Only mobile
+    if (globalThis.window.innerWidth >= 1024) return; // desktop only
     if (this.isPullRefreshing) return;
 
     const touch = e.touches[0];
-    // Record for back-swipe detection
+    // Record start for both back-swipe and pull detection
     this.touchStartX = touch.clientX;
     this.touchStartY = touch.clientY;
     this.touchStartTime = Date.now();
 
-    // Allow pull from ANYWHERE — check if the scrollable `main` is at top,
-    // but if the touch started OUTSIDE the main element (e.g. header, dock),
-    // still allow pull since there is nothing to scroll there.
+    // Snapshot the pullStartY — we'll decide in touchmove whether to use it
     const mainEl = globalThis.window.document.querySelector('main') as HTMLElement | null;
     const isAtTop = !mainEl || mainEl.scrollTop <= 5;
     const touchedOutsideMain = mainEl ? !mainEl.contains(e.target as Node) : true;
 
-    if (isAtTop || touchedOutsideMain) {
-      this.pullStartY = touch.clientY;
-    } else {
-      this.pullStartY = null;
-    }
+    // Pre-arm pull if we're at the scroll top or outside the scrollable area.
+    // We do NOT set isPulling yet — that only happens when the move direction is confirmed.
+    this.pullStartY = (isAtTop || touchedOutsideMain) ? touch.clientY : null;
   };
 
   private readonly onTouchMove = (e: TouchEvent) => {
@@ -101,34 +97,45 @@ export class App {
 
     const touch = e.touches[0];
     const deltaY = touch.clientY - this.pullStartY;
+    const deltaX = Math.abs(touch.clientX - (this.touchStartX ?? touch.clientX));
 
-    // Start pulling threshold
-    if (!this.isPulling && deltaY < 10) {
-      return;
+    // ── Key guard ──────────────────────────────────────────────────────────
+    // If the gesture isn't clearly downward-vertical, cancel the pull arm and
+    // let the event propagate untouched to child elements (swipe, scroll, tap).
+    if (!this.isPulling) {
+      if (deltaY < 10) return;           // haven't moved far enough yet
+      if (deltaX > deltaY) {             // more horizontal than vertical → not a pull
+        this.pullStartY = null;
+        return;
+      }
     }
+    // ───────────────────────────────────────────────────────────────────────
 
     if (deltaY <= 0) {
-      // Snap back smoothly
-      this.ngZone.run(() => {
-        this.isPulling = false;
-        this.pullDistance = 0;
-        this.cdr.detectChanges();
-      });
+      if (this.isPulling) {
+        // Only update Angular when we were actually pulling
+        this.ngZone.run(() => {
+          this.isPulling = false;
+          this.pullDistance = 0;
+          this.cdr.detectChanges();
+        });
+      }
       return;
     }
 
-    // Use ngZone.run so the template updates as the finger moves
+    // Confirmed pull — update UI
+    const newDistance = Math.min(this.pullMaxDistance, deltaY * 0.5);
     this.ngZone.run(() => {
       this.isPulling = true;
-      this.pullDistance = Math.min(this.pullMaxDistance, deltaY * 0.5);
+      this.pullDistance = newDistance;
       this.cdr.detectChanges();
     });
   };
 
   private readonly onTouchEnd = (e: TouchEvent) => {
     if (globalThis.window.innerWidth >= 1024) return;
-    
-    // 1. Handle Refresh Check
+
+    // Only handle pull logic if we were actually pulling
     if (this.isPulling && !this.isPullRefreshing) {
       if (this.pullDistance >= this.pullTriggerDistance) {
         this.ngZone.run(() => {
@@ -137,7 +144,6 @@ export class App {
           this.pullDistance = this.pullTriggerDistance;
           this.cdr.detectChanges();
         });
-
         setTimeout(() => {
           globalThis.window.location.reload();
         }, 800);
@@ -147,31 +153,37 @@ export class App {
           this.cdr.detectChanges();
         });
       }
+      // Consumed by pull — don't also fire back-swipe
+      this.touchStartX = this.touchStartY = this.touchStartTime = null;
+      return;
     }
 
-    // 2. Handle Back Swipe (existing logic)
+    // Not a pull — handle back-swipe detection and clear state, no Angular run needed
     if (this.touchStartX !== null && this.touchStartY !== null && this.touchStartTime !== null) {
       const touch = e.changedTouches[0];
       const dx = touch.clientX - this.touchStartX;
       const dy = Math.abs(touch.clientY - this.touchStartY);
       const dt = Date.now() - this.touchStartTime;
 
-      if (this.touchStartX <= 30 && dx > 50 && dy < 40 && dt < 500 && !this.isPulling) {
+      if (this.touchStartX <= 30 && dx > 50 && dy < 40 && dt < 500) {
         globalThis.window.history.back();
       }
     }
 
     this.touchStartX = this.touchStartY = this.touchStartTime = null;
-    if (!this.isPullRefreshing) {
+    // Reset pull arm without Angular zone (state was never set, so no CD needed)
+    this.pullStartY = null;
+  };
+
+  private readonly onTouchCancel = () => {
+    if (this.isPulling) {
       this.ngZone.run(() => {
         this.resetPullState();
         this.cdr.detectChanges();
       });
+    } else {
+      this.pullStartY = null;
     }
-  };
-
-  private readonly onTouchCancel = () => {
-    this.resetPullState();
     this.touchStartX = this.touchStartY = this.touchStartTime = null;
   };
 
