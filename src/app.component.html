@@ -1,4 +1,19 @@
 <joys-overlay-loading [show]="globalLoading" [message]="'common.loading' | translate"></joys-overlay-loading>
+<!-- TOP OF THE TOP: Floating Refresh Indicator -->
+<div class="fixed inset-x-0 top-0 flex items-center justify-center pointer-events-none z-[10000]"
+     style="padding-top: env(safe-area-inset-top, 0px);">
+  <div *ngIf="showPullRefreshIndicator"
+       class="mt-4 flex h-11 w-11 items-center justify-center rounded-full bg-white dark:bg-slate-800 shadow-xl border border-slate-100 dark:border-slate-700 transition-all duration-150"
+       [style.opacity]="pullRefreshOpacity"
+       [style.transform]="'translateY(' + (pullDistance - 10) + 'px) rotate(' + (pullDistance * 4) + 'deg) scale(' + (pullDistance >= pullTriggerDistance ? 1.1 : 1) + ')'"
+       [class.border-emerald-500]="pullDistance >= pullTriggerDistance && !isPullRefreshing"
+       [class.text-emerald-500]="pullDistance >= pullTriggerDistance && !isPullRefreshing"
+       [class.text-primary]="pullDistance < pullTriggerDistance || isPullRefreshing">
+    <span class="material-symbols-outlined text-[24px]" [class.animate-spin]="isPullRefreshing">
+      {{ isPullRefreshing ? 'progress_activity' : (pullDistance >= pullTriggerDistance ? 'check_circle' : 'refresh') }}
+    </span>
+  </div>
+</div>
 
 
 
@@ -8,7 +23,9 @@
       (externalOverlayChange)="sidebarOverlay = $event" (collapseToggle)="sidebarCollapsed = $event"
       (navigationClicked)="onNavigationChanged($event)"></joys-sidebar>
   </div>
-  <div class="flex min-h-0 flex-1 flex-col">
+  <div class="flex min-h-0 flex-1 flex-col transition-transform duration-300"
+       [class.duration-0]="isPulling"
+       [style.transform]="mainContainerTransform">
     <div class="hidden lg:block">
       <joys-header (createGroupClicked)="onCreateGroupClicked()" [sidebarCollapsed]="sidebarCollapsed"
         (toggleSidebar)="toggleSidebar()"></joys-header>

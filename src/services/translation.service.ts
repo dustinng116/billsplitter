@@ -223,6 +223,7 @@ const EN_DICTIONARY: TranslationDictionary = {
   'common.syncing': 'Syncing...',
   'common.avatar': 'avatar',
   'common.uploadError': 'Failed to upload image. Please try again.',
+  'common.signInFailed': 'Sign in failed. Please try again.',
 
   'joys.photoHint': 'Add an image for this Joy',
   'joys.placeholderName': 'e.g., Beach Trip',
@@ -477,6 +478,7 @@ const VN_DICTIONARY: TranslationDictionary = {
   'common.syncing': 'Đang đồng bộ...',
   'common.avatar': 'ảnh đại diện',
   'common.uploadError': 'Không thể tải ảnh lên. Vui lòng thử lại.',
+  'common.signInFailed': 'Đăng nhập thất bại. Vui lòng thử lại.',
 
   'joys.photoHint': 'Thêm ảnh cho Joy này',
   'joys.placeholderName': 'vd., Chuyến đi biển',

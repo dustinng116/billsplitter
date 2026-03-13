@@ -58,12 +58,10 @@ export class MainContentComponent implements OnInit {
   hasGuestData = false;
   isSyncingGuestData = false;
   isPageLoading = false;
-  private pullStartY: number | null = null;
-  pullDistance = 0;
-  isPulling = false;
-  isPullRefreshing = false;
   readonly pullTriggerDistance = 70;
   private readonly pullMaxDistance = 110;
+  private readonly minimumLoadingDuration = 500;
+  
   private readonly routeSubscription: Subscription;
   readonly supportedCurrencies: AppCurrency[];
   isSyncingCurrencyRates = false;
@@ -76,7 +74,7 @@ export class MainContentComponent implements OnInit {
           console.error("Google sign in failed:", error);
           const message =
             (error as { message?: string })?.message ||
-            "Sign in failed. Please try again.";
+            this.translationService.t("common.signInFailed");
           if (typeof (window as any).joysShowToast === "function") {
             (window as any).joysShowToast(message);
           }
@@ -86,7 +84,7 @@ export class MainContentComponent implements OnInit {
         console.error("Google sign in failed:", error);
         const message =
           (error as { message?: string })?.message ||
-          "Sign in failed. Please try again.";
+          this.translationService.t("common.signInFailed");
         if (typeof (window as any).joysShowToast === "function") {
           (window as any).joysShowToast(message);
         }
@@ -169,119 +167,14 @@ export class MainContentComponent implements OnInit {
     );
   }
 
-  get showPullRefreshIndicator(): boolean {
-    return this.isPulling || this.isPullRefreshing || this.pullDistance > 0;
-  }
-
-  get pullRefreshOpacity(): number {
-    if (this.isPullRefreshing) {
-      return 1;
-    }
-
-    // Show more aggressively: starts showing at 5px, fully opaque at 40px
-    return Math.max(
-      0,
-      Math.min(1, (this.pullDistance - 5) / 35)
-    );
-  }
-
-  get pullRefreshTranslateY(): number {
-    if (this.isPullRefreshing) {
-      return 0;
-    }
-
-    return Math.max(-18, 8 - this.pullDistance * 0.25);
-  }
-
   get mainTransform(): string {
-    if (this.isPullRefreshing) {
-      return `translate3d(0, ${this.pullTriggerDistance}px, 0)`;
-    }
-    if (this.isPulling) {
-      return `translate3d(0, ${this.pullDistance}px, 0)`;
-    }
     return '';
   }
 
   ngOnInit(): void {
-    // Register touch listeners outside Angular so we can use { passive: true } for touchstart/touchmove.
-    // This is CRITICAL on iOS Safari: non-passive touchmove listeners on a scroll container
-    // prevent the browser from delivering tap/click events to child elements.
-    this.ngZone.runOutsideAngular(() => {
-      const mainEl = this.elementRef.nativeElement.querySelector('main') as HTMLElement | null;
-      if (!mainEl) return;
-
-      mainEl.addEventListener('touchstart', (e) => this._onTouchStart(e), { passive: true });
-      mainEl.addEventListener('touchmove', (e) => this._onTouchMove(e), { passive: true });
-      mainEl.addEventListener('touchend', () => this._onTouchEnd(), { passive: true });
-      mainEl.addEventListener('touchcancel', () => this._onTouchCancel(), { passive: true });
-    });
-  }
-
-  private _onTouchStart(event: TouchEvent): void {
-    if (this.isPullRefreshing) return;
-    if ((globalThis.window?.innerWidth ?? 1200) >= 1024) {
-      this.pullStartY = null;
-      return;
-    }
-    const target = event.currentTarget as HTMLElement | null;
-    if (!target || target.scrollTop > 5) {
-      this.pullStartY = null;
-      return;
-    }
-    this.pullStartY = event.touches[0]?.clientY ?? null;
-  }
-
-  private _onTouchMove(event: TouchEvent): void {
-    if (this.pullStartY === null || this.isPullRefreshing) return;
-    const currentY = event.touches[0]?.clientY ?? this.pullStartY;
-    const delta = currentY - this.pullStartY;
-    if (delta <= 0) {
-      this.ngZone.run(() => {
-        this.pullDistance = 0;
-        this.isPulling = false;
-      });
-      return;
-    }
-    // We do NOT prevent default here so iOS Safari allows taps.
-    // overscroll-behavior-y: none on the container prevents the native bounce
-    this.ngZone.run(() => {
-      this.isPulling = true;
-      this.pullDistance = Math.min(this.pullMaxDistance, delta * 0.5);
-    });
-  }
-
-  private _onTouchEnd(): void {
-    this.ngZone.run(() => {
-      if (!this.isPulling || this.isPullRefreshing) {
-        this.resetPullState();
-        return;
-      }
-      if (this.pullDistance >= this.pullTriggerDistance) {
-        this.isPullRefreshing = true;
-        this.pullDistance = this.pullTriggerDistance;
-        this.isPulling = false; // allows css transition to kick in for smooth release
-        
-        // Wait 800ms for the user to see the refresh animation 
-        // before doing a hard browser reload
-        setTimeout(() => {
-          globalThis.window.location.reload();
-        }, 800);
-        return;
-      }
-      this.resetPullState();
-    });
-  }
-
-  private _onTouchCancel(): void {
-    if (this.isPullRefreshing) return;
-    this.ngZone.run(() => this.resetPullState());
   }
 
   private resetPullState(): void {
-    this.pullStartY = null;
-    this.pullDistance = 0;
-    this.isPulling = false;
   }
 
   getInitials(name?: string | null): string {

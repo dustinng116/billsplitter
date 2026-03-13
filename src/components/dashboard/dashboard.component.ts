@@ -87,6 +87,8 @@ export class DashboardComponent implements OnChanges, OnDestroy {
   private openedSwipeGroupId = "";
   private draggingGroupId = "";
   private touchStartX = 0;
+  private touchStartY = 0;
+  private isMovementDetected = false;
   private currentSwipeOffset = 0;
 
   selectedExpenseGroupId = "";
@@ -362,6 +364,8 @@ export class DashboardComponent implements OnChanges, OnDestroy {
     }
     this.draggingGroupId = groupId;
     this.touchStartX = event.touches[0]?.clientX ?? 0;
+    this.touchStartY = event.touches[0]?.clientY ?? 0;
+    this.isMovementDetected = false;
     this.currentSwipeOffset =
       this.openedSwipeGroupId === groupId ? -MOBILE_SWIPE_ACTION_WIDTH : 0;
   }
@@ -372,7 +376,24 @@ export class DashboardComponent implements OnChanges, OnDestroy {
     }
 
     const currentX = event.touches[0]?.clientX ?? this.touchStartX;
+    const currentY = event.touches[0]?.clientY ?? this.touchStartY;
     const deltaX = currentX - this.touchStartX;
+    const deltaY = currentY - this.touchStartY;
+
+    // If there is significant vertical movement, it's a scroll or pull.
+    // Abort the swipe-to-delete to avoid "impacting the group item".
+    if (!this.isMovementDetected && Math.abs(deltaY) > Math.abs(deltaX) + 5) {
+      this.draggingGroupId = "";
+      return;
+    }
+
+    // Movement threshold to avoid jitters and allow clicks
+    if (!this.isMovementDetected && Math.abs(deltaX) < 10 && Math.abs(deltaY) < 10) {
+      return;
+    }
+    
+    this.isMovementDetected = true;
+
     const baseOffset =
       this.openedSwipeGroupId === groupId ? -MOBILE_SWIPE_ACTION_WIDTH : 0;
     this.currentSwipeOffset = Math.max(
@@ -609,6 +630,9 @@ export class DashboardComponent implements OnChanges, OnDestroy {
   }
 
   onGroupClick(groupId: string): void {
+    if (this.isMovementDetected) {
+      return;
+    }
     this.groupClicked.emit(groupId);
   }
 

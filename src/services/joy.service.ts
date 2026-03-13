@@ -287,7 +287,8 @@ export class JoyService {
       date: joyData.date,
       icon: iconInfo.icon,
       iconBg: iconInfo.iconBg,
-      iconColor: iconInfo.iconColor
+      iconColor: iconInfo.iconColor,
+      coverImage: joyData.coverImage
     };
 
     if (this.dataScopeService.isGuest()) {

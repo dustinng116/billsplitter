@@ -51,6 +51,8 @@ export class GroupDetailComponent implements OnChanges, OnDestroy {
   private openedSwipeExpenseId = '';
   private draggingExpenseId = '';
   private touchStartX = 0;
+  private touchStartY = 0;
+  private isMovementDetected = false;
   private currentSwipeOffset = 0;
   private unsubscribeGroup: Unsubscribe | null = null;
   private unsubscribeExpenses: Unsubscribe | null = null;
@@ -114,7 +116,7 @@ export class GroupDetailComponent implements OnChanges, OnDestroy {
   }
 
   onMobileExpenseClick(expense: GroupExpense): void {
-    if (this.draggingExpenseId) {
+    if (this.isMovementDetected) {
       return;
     }
 
@@ -307,6 +309,8 @@ export class GroupDetailComponent implements OnChanges, OnDestroy {
     }
     this.draggingExpenseId = expenseId;
     this.touchStartX = event.touches[0]?.clientX ?? 0;
+    this.touchStartY = event.touches[0]?.clientY ?? 0;
+    this.isMovementDetected = false;
     this.currentSwipeOffset = this.openedSwipeExpenseId === expenseId ? -MOBILE_SWIPE_ACTION_WIDTH : 0;
   }
 
@@ -316,7 +320,24 @@ export class GroupDetailComponent implements OnChanges, OnDestroy {
     }
 
     const currentX = event.touches[0]?.clientX ?? this.touchStartX;
+    const currentY = event.touches[0]?.clientY ?? this.touchStartY;
     const deltaX = currentX - this.touchStartX;
+    const deltaY = currentY - this.touchStartY;
+
+    // If there is significant vertical movement, it's a scroll or pull.
+    // Abort the swipe-to-delete to avoid "impacting the group item".
+    if (!this.isMovementDetected && Math.abs(deltaY) > Math.abs(deltaX) + 5) {
+      this.draggingExpenseId = "";
+      return;
+    }
+
+    // Movement threshold to avoid jitters and allow clicks
+    if (!this.isMovementDetected && Math.abs(deltaX) < 10 && Math.abs(deltaY) < 10) {
+      return;
+    }
+    
+    this.isMovementDetected = true;
+
     const baseOffset = this.openedSwipeExpenseId === expenseId ? -MOBILE_SWIPE_ACTION_WIDTH : 0;
     this.currentSwipeOffset = Math.max(-MOBILE_SWIPE_ACTION_WIDTH, Math.min(0, baseOffset + deltaX));
   }
