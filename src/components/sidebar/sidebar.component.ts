@@ -5,7 +5,7 @@ import { ThemeMode, ThemeService } from '../../services/theme.service';
 import { TranslationService } from '../../services/translation.service';
 
 interface SidebarItem {
-  icon: string;
+  icon?: string;
   labelKey: string;
   active?: boolean;
   isLogout?: boolean;
@@ -51,15 +51,11 @@ interface SidebarItem {
       <div class="flex flex-col h-full">
         <div class="mb-6 flex items-center" [ngClass]="(collapsed && !overlayOpen) ? 'justify-center gap-0' : 'justify-start gap-3'">
           <div 
-            class="flex-none h-10 w-10 items-center justify-center rounded-lg cursor-pointer transition p-2"
+            class="flex h-10 w-10 flex-none items-center justify-center overflow-hidden rounded-lg cursor-pointer transition bg-white dark:bg-slate-800"
             (click)="onToggleCollapse($event)"
-            [ngClass]="{
-              'bg-primary text-white': !collapsed,
-              'bg-transparent text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800': collapsed
-            }"
             [title]="'sidebar.toggleSidebar' | translate"
           >
-            <span class="material-symbols-outlined">{{ (collapsed && !overlayOpen) ? 'menu' : 'payments' }}</span>
+            <img src="assets/joys-splitter.png" alt="Joys Splitter" class="h-9 w-9 object-contain" />
           </div>
           <div class="overflow-hidden transition-all duration-300 ease-in-out"
             [ngClass]="(overlayOpen ? false : collapsed) ? 'max-w-0 opacity-0' : 'max-w-[200px] opacity-100'">
@@ -86,9 +82,37 @@ interface SidebarItem {
           </a>
         </div>
         <div class="my-4 border-t border-slate-100 dark:border-slate-800"></div>
-        <div class="mt-auto flex flex-col gap-1.5">
+        <div class="relative mt-auto flex flex-col gap-1.5">
+          <div *ngIf="collapsed && !overlayOpen" class="mb-2 flex flex-col items-center gap-2">
+            <button
+              type="button"
+              (click)="setTheme('light', $event)"
+              [class]="getCollapsedThemeButtonClasses('light')"
+              [title]="'sidebar.theme.light' | translate"
+            >
+              <span class="material-symbols-outlined text-[18px]">light_mode</span>
+            </button>
+            <button
+              type="button"
+              (click)="setTheme('dark', $event)"
+              [class]="getCollapsedThemeButtonClasses('dark')"
+              [title]="'sidebar.theme.dark' | translate"
+            >
+              <span class="material-symbols-outlined text-[18px]">dark_mode</span>
+            </button>
+            <button
+              type="button"
+              (click)="setTheme('system', $event)"
+              [class]="getCollapsedThemeButtonClasses('system')"
+              [title]="'sidebar.theme.system' | translate"
+            >
+              <span class="material-symbols-outlined text-[18px]">desktop_windows</span>
+            </button>
+          </div>
+
           <a
             *ngFor="let item of bottomItems"
+            [style.display]="collapsed && !overlayOpen ? 'none' : null"
             (click)="onNavigationClick(item, $event)"
             [class]="getSidebarItemClasses(item)"
             class="sidebar-link flex items-center py-2.5 rounded-lg transition-colors cursor-pointer"
@@ -106,8 +130,8 @@ interface SidebarItem {
           </a>
 
           <div
-            *ngIf="themeMenuOpen && (overlayOpen || !collapsed)"
-            class="ml-2 mr-1 mt-1 rounded-xl border border-slate-200 bg-slate-50 p-2 dark:border-slate-700 dark:bg-slate-800/70"
+            *ngIf="themeMenuOpen"
+            [class]="getThemeMenuContainerClasses()"
           >
             <div class="mb-2 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
               {{ 'sidebar.theme.current' | translate : { mode: getCurrentThemeLabel() } }}
@@ -148,6 +172,7 @@ export class SidebarComponent implements OnChanges, OnInit {
   @Output() navigationClicked = new EventEmitter<string>();
   @Input() collapsed = false;
   @Input() externalOverlay = false;
+  @Input() activeView = 'joys-table';
   @Output() externalOverlayChange = new EventEmitter<boolean>();
   @Output() collapseToggle = new EventEmitter<boolean>();
   // Overlay state for mobile/tablet when sidebar should overlay content
@@ -159,9 +184,7 @@ export class SidebarComponent implements OnChanges, OnInit {
     { icon: 'timeline', labelKey: 'sidebar.activities', href: 'activities' }
   ];
   bottomItems: SidebarItem[] = [
-    { icon: 'settings', labelKey: 'sidebar.settings', href: 'settings' },
-    { icon: 'contrast', labelKey: 'sidebar.theme', isThemeMenu: true, href: 'theme-menu' },
-    { icon: 'logout', labelKey: 'sidebar.logout', isLogout: true, href: 'logout' }
+    { icon: 'contrast', labelKey: 'sidebar.theme', isThemeMenu: true, href: 'theme-menu' }
   ];
 
   constructor(
@@ -176,6 +199,9 @@ export class SidebarComponent implements OnChanges, OnInit {
     if (changes['externalOverlay']) {
       this.overlayOpen = changes['externalOverlay'].currentValue;
     }
+    if (changes['activeView']) {
+      this.syncActiveItems();
+    }
   }
 
   ngOnInit(): void {
@@ -184,6 +210,8 @@ export class SidebarComponent implements OnChanges, OnInit {
     if (win && win.innerWidth < 1024) {
       this.collapsed = true;
     }
+
+    this.syncActiveItems();
   }
 
   onToggleCollapse(event: Event) {
@@ -218,7 +246,6 @@ export class SidebarComponent implements OnChanges, OnInit {
       return;
     }
 
-    // Update active state
     this.navigationItems.forEach(navItem => navItem.active = false);
     this.bottomItems.forEach(bottomItem => {
       if (!bottomItem.isThemeMenu) {
@@ -228,6 +255,22 @@ export class SidebarComponent implements OnChanges, OnInit {
     item.active = true;
     this.themeMenuOpen = false;
     this.navigationClicked.emit(item.href);
+  }
+
+  private syncActiveItems(): void {
+    const normalizedView = this.activeView === 'dashboard' || this.activeView === 'group-detail'
+      ? 'joys-table'
+      : this.activeView;
+
+    this.navigationItems.forEach((item) => {
+      item.active = item.href === normalizedView;
+    });
+
+    this.bottomItems.forEach((item) => {
+      if (!item.isThemeMenu && !item.isLogout) {
+        item.active = item.href === normalizedView;
+      }
+    });
   }
 
   getSidebarItemClasses(item: SidebarItem): string {
@@ -250,6 +293,7 @@ export class SidebarComponent implements OnChanges, OnInit {
   setTheme(mode: ThemeMode, event: Event): void {
     event.stopPropagation();
     this.themeService.setMode(mode);
+    this.themeMenuOpen = false;
   }
 
   getThemeButtonClasses(mode: ThemeMode): string {
@@ -259,6 +303,26 @@ export class SidebarComponent implements OnChanges, OnInit {
       return `${base} bg-primary text-white`;
     }
     return `${base} bg-white text-slate-600 hover:bg-slate-100 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-700`;
+  }
+
+  getCollapsedThemeButtonClasses(mode: ThemeMode): string {
+    const isActive = this.themeService.currentMode() === mode;
+    const base = 'inline-flex h-10 w-10 items-center justify-center rounded-xl border transition-colors';
+    if (isActive) {
+      return `${base} border-primary bg-primary/10 text-primary`;
+    }
+
+    return `${base} border-slate-200 bg-white text-slate-600 hover:border-primary/30 hover:text-primary dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300`;
+  }
+
+  getThemeMenuContainerClasses(): string {
+    const base = 'rounded-xl border border-slate-200 bg-slate-50 p-2 dark:border-slate-700 dark:bg-slate-800/70';
+
+    if (this.overlayOpen || !this.collapsed) {
+      return `ml-2 mr-1 mt-1 ${base}`;
+    }
+
+    return `absolute bottom-[calc(100%+0.5rem)] left-1/2 z-20 w-[210px] -translate-x-1/2 shadow-xl shadow-slate-900/10 ${base}`;
   }
 
   getCurrentThemeLabel(): string {

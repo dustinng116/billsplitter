@@ -1,4 +1,5 @@
 import { Injectable } from '@angular/core';
+import { getAuth } from 'firebase/auth';
 import { onValue, push, ref, remove, set, type Unsubscribe } from 'firebase/database';
 import { db } from '../firebase';
 import { Friend, FriendForm } from '../types/friend.interface';
@@ -80,6 +81,8 @@ export class FriendService {
 
     await set(friendReference, friendPayload);
 
+    await this.syncReciprocalFriend(friendPayload);
+
     return {
       id: friendReference.key ?? crypto.randomUUID(),
       ...friendPayload
@@ -134,5 +137,29 @@ export class FriendService {
 
   private sortFriends(friends: Friend[]): Friend[] {
     return [...friends].sort((leftFriend, rightFriend) => leftFriend.name.localeCompare(rightFriend.name));
+  }
+
+  private async syncReciprocalFriend(friendPayload: Omit<Friend, 'id'>): Promise<void> {
+    const currentUid = this.dataScopeService.getCurrentUid();
+    const currentAuthUser = getAuth().currentUser;
+
+    if (!currentUid || !currentAuthUser?.email) {
+      return;
+    }
+
+    const reciprocalUser = await this.userDirectoryService.getUserByEmail(friendPayload.email);
+    if (!reciprocalUser || reciprocalUser.uid === currentUid) {
+      return;
+    }
+
+    const currentDirectoryUser = await this.userDirectoryService.getUserByUid(currentUid);
+    const reciprocalPayload: Omit<Friend, 'id'> = {
+      name: currentDirectoryUser?.displayName || currentAuthUser.displayName || currentAuthUser.email || 'User',
+      email: currentDirectoryUser?.email || currentAuthUser.email || '',
+      phone: currentDirectoryUser?.phone || currentAuthUser.phoneNumber || '',
+      avatar: currentDirectoryUser?.avatar || currentAuthUser.photoURL || ''
+    };
+
+    await set(ref(db, `users/${reciprocalUser.uid}/friends/${currentUid}`), reciprocalPayload);
   }
 }

@@ -14,8 +14,10 @@ import {
 import { CommonModule } from "@angular/common";
 import { FormsModule } from "@angular/forms";
 import { type Unsubscribe } from "firebase/database";
+import { Subscription } from "rxjs";
 import { AddExpenseDialogComponent } from "../add-expense-dialog/add-expense-dialog.component";
 import { CurrencyService } from "../../services/currency.service";
+import { AppCurrency } from "../../services/currency.service";
 import { AvatarColorService } from "../../services/avatar-color.service";
 import { TranslatePipe } from "../../pipes/translate.pipe";
 import { JoyService } from "../../services/joy.service";
@@ -29,12 +31,16 @@ import {
   JoyCategory,
   JoyGroup,
   JoyGroupMember,
+  JoyExpense,
 } from "../../types/joy.interface";
+import { UserSessionService } from "../../services/user-session.service";
 
 interface SplitBillSummary {
   key: string;
   name: string;
+  email: string;
   amount: number;
+  isPaid: boolean;
 }
 
 interface JoyConfigForm {
@@ -73,43 +79,69 @@ interface JoyConfigForm {
 
       <ng-container *ngIf="joyId && selectedJoy as joy">
         <header class="md:hidden pb-4">
-          <div class="flex items-center justify-between mb-2">
-            <button
-              type="button"
-              (click)="onBackToJoysClick()"
-              class="p-2 -ml-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-            >
-              <span
-                class="material-symbols-outlined text-slate-600 dark:text-slate-400"
-                >arrow_back</span
-              >
-            </button>
-            <button
-              type="button"
-              (click)="openJoyConfigDialog()"
-              class="inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 transition-colors hover:border-primary/30 hover:text-primary dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-primary/30 dark:hover:text-primary"
-              [attr.aria-label]="'dashboard.editJoy' | translate"
-              [title]="'dashboard.editJoy' | translate"
-            >
-              <span class="material-symbols-outlined text-[18px]"
-                >settings</span
-              >
-            </button>
+          <div class="relative min-h-[224px] overflow-hidden rounded-[28px] shadow-sm">
+            <img
+              src="https://images.unsplash.com/photo-1525625293386-3f8f99389edd?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80"
+              alt="Cover"
+              class="absolute inset-0 h-full w-full object-cover"
+            />
+            <div class="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-slate-900/35 to-slate-900/10"></div>
+
+            <div class="relative z-10 flex min-h-[224px] flex-col justify-between p-4">
+              <div class="flex items-center justify-between gap-3">
+                <button
+                  type="button"
+                  (click)="onBackToJoysClick()"
+                  class="inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/30 bg-white/15 text-white backdrop-blur-md transition-colors hover:bg-white/25"
+                >
+                  <span class="material-symbols-outlined text-[20px]"
+                    >arrow_back</span
+                  >
+                </button>
+                <button
+                  type="button"
+                  (click)="openJoyConfigDialog()"
+                  class="inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/30 bg-white/15 text-white backdrop-blur-md transition-colors hover:bg-white/25"
+                  [attr.aria-label]="'dashboard.editJoy' | translate"
+                  [title]="'dashboard.editJoy' | translate"
+                >
+                  <span class="material-symbols-outlined text-[18px]"
+                    >settings</span
+                  >
+                </button>
+              </div>
+
+              <div class="space-y-3 pr-2">
+                <div>
+                  <h1
+                    class="break-words text-3xl font-black tracking-tight text-white"
+                  >
+                    {{ joy.joyName }}
+                  </h1>
+                  <p
+                    class="mt-2 flex flex-wrap items-center gap-1.5 text-sm font-medium text-white/90"
+                  >
+                    <span class="material-symbols-outlined text-sm"
+                      >calendar_today</span
+                    >
+                    {{ joy.date || ("dashboard.noDate" | translate) }} •
+                    {{ getCategoryLabel(joy.category) }}
+                  </p>
+                </div>
+
+                <!-- <button
+                  type="button"
+                  (click)="onNewGroupClick()"
+                  class="inline-flex h-11 items-center justify-center gap-2 self-start rounded-xl border border-white/25 bg-white/15 px-4 text-sm font-bold text-white backdrop-blur-md transition-colors hover:bg-white/25"
+                >
+                  <span class="material-symbols-outlined text-[18px]"
+                    >group_add</span
+                  >
+                  {{ "dashboard.newGroup" | translate }}
+                </button> -->
+              </div>
+            </div>
           </div>
-          <h1
-            class="text-3xl font-bold tracking-tight text-slate-900 dark:text-white"
-          >
-            {{ joy.joyName }}
-          </h1>
-          <p
-            class="text-slate-500 dark:text-slate-400 text-sm mt-1 font-medium flex items-center gap-1"
-          >
-            <span class="material-symbols-outlined text-sm"
-              >calendar_today</span
-            >
-            {{ joy.date || ("dashboard.noDate" | translate) }} •
-            {{ joy.category }}
-          </p>
         </header>
 
         <header class="hidden md:block mb-8">
@@ -124,6 +156,16 @@ interface JoyConfigForm {
               alt="Cover"
               class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
             />
+            <button
+              type="button"
+              (click)="onBackToJoysClick()"
+              class="absolute left-6 top-6 z-20 bg-white/20 backdrop-blur-md hover:bg-white/30 text-white border border-white/30 px-5 py-2 rounded-xl text-sm font-bold transition-all flex items-center gap-2"
+            >
+              <span class="material-symbols-outlined text-sm"
+                >arrow_back</span
+              >
+              {{ "groupDetail.backToJoys" | translate }}
+            </button>
             <div
               class="absolute bottom-0 left-0 p-8 z-20 w-full flex justify-between items-end"
             >
@@ -137,21 +179,11 @@ interface JoyConfigForm {
                   >
                   <span class="text-sm font-medium"
                     >{{ joy.date || ("dashboard.noDate" | translate) }} •
-                    {{ joy.category }}</span
+                    {{ getCategoryLabel(joy.category) }}</span
                   >
                 </div>
               </div>
               <div class="flex items-center gap-2">
-                <button
-                  type="button"
-                  (click)="onBackToJoysClick()"
-                  class="bg-white/20 backdrop-blur-md hover:bg-white/30 text-white border border-white/30 px-5 py-2 rounded-xl text-sm font-bold transition-all flex items-center gap-2"
-                >
-                  <span class="material-symbols-outlined text-sm"
-                    >arrow_back</span
-                  >
-                  {{ "groupDetail.backToJoys" | translate }}
-                </button>
                 <button
                   type="button"
                   (click)="openJoyConfigDialog()"
@@ -180,30 +212,30 @@ interface JoyConfigForm {
 
         <section class="grid grid-cols-2 gap-4 md:gap-6 mb-8">
           <div
-            class="bg-primary/5 md:bg-white dark:bg-primary/10 md:dark:bg-slate-900 p-4 md:p-6 rounded-xl md:rounded-2xl border border-primary/10 md:border-slate-200 dark:border-primary/20 md:dark:border-slate-800 shadow-sm flex flex-col justify-between"
+            class="bg-gradient-to-br from-sky-100 via-cyan-50 to-white dark:from-sky-950/50 dark:via-cyan-950/30 dark:to-slate-900 p-4 md:p-6 rounded-xl md:rounded-2xl border border-sky-200/70 dark:border-sky-900/40 shadow-sm flex flex-col justify-between"
           >
             <p
-              class="text-slate-500 dark:text-slate-400 text-xs md:text-sm font-semibold uppercase tracking-wider mb-1 md:mb-2"
+              class="text-sky-700/80 dark:text-sky-200/70 text-xs md:text-sm font-semibold uppercase tracking-wider mb-1 md:mb-2"
             >
               {{ "dashboard.totalGroupSpend" | translate }}
             </p>
             <p
-              class="text-xl md:text-3xl font-black text-slate-900 dark:text-white"
+              class="text-xl md:text-3xl font-black text-sky-950 dark:text-sky-100"
             >
               {{ formatAmount(totalSpent) }}
             </p>
           </div>
 
           <div
-            class="bg-slate-50 md:bg-white dark:bg-slate-800 md:dark:bg-slate-900 p-4 md:p-6 rounded-xl md:rounded-2xl border border-slate-100 md:border-slate-200 dark:border-slate-700 md:dark:border-slate-800 shadow-sm flex flex-col justify-between"
+            class="bg-gradient-to-br from-violet-100 via-fuchsia-50 to-white dark:from-violet-950/50 dark:via-fuchsia-950/30 dark:to-slate-900 p-4 md:p-6 rounded-xl md:rounded-2xl border border-violet-200/70 dark:border-violet-900/40 shadow-sm flex flex-col justify-between"
           >
             <p
-              class="text-slate-500 dark:text-slate-400 text-xs md:text-sm font-semibold uppercase tracking-wider mb-1 md:mb-2"
+              class="text-violet-700/80 dark:text-violet-200/70 text-xs md:text-sm font-semibold uppercase tracking-wider mb-1 md:mb-2"
             >
-              {{ "dashboard.totalYouOwe" | translate }}
+              {{ "dashboard.totalYouSpent" | translate }}
             </p>
-            <p class="text-xl md:text-3xl font-black text-rose-500">
-              {{ formatAmount(totalYouOwe) }}
+            <p class="text-xl md:text-3xl font-black text-violet-950 dark:text-violet-100">
+              {{ formatAmount(totalYouSpent) }}
             </p>
           </div>
         </section>
@@ -317,26 +349,68 @@ interface JoyConfigForm {
                   *ngFor="let item of splitBillSummaries"
                   class="rounded-xl border border-slate-100 bg-slate-50 p-3 dark:border-slate-800 dark:bg-slate-950/50 md:rounded-none md:border-0 md:bg-transparent md:p-4 md:border-b md:border-slate-50 md:dark:border-slate-800/50"
                 >
-                  <div class="flex items-center gap-3">
+                  <div class="flex items-start gap-3">
                     <div
-                      class="w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm"
+                      class="w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm shrink-0"
                       [ngClass]="getAvatarColorClasses(item.name)"
                     >
                       {{ item.name.charAt(0).toUpperCase() }}
                     </div>
-                    <div class="min-w-0">
-                      <p
-                        class="truncate text-sm font-bold text-slate-900 dark:text-white"
-                      >
-                        {{ item.name }}
-                      </p>
+                    <div class="min-w-0 flex-1">
+                      <div class="flex items-start gap-3 justify-between">
+                        <div class="min-w-0 flex-1">
+                          <p
+                            class="truncate text-sm font-bold text-slate-900 dark:text-white"
+                            [class.line-through]="item.isPaid"
+                            [class.text-slate-400]="item.isPaid"
+                            [class.dark:text-slate-500]="item.isPaid"
+                          >
+                            {{ item.name }}
+                          </p>
+                          <p *ngIf="item.email" class="truncate text-xs text-slate-500 dark:text-slate-400" [class.line-through]="item.isPaid">
+                            {{ item.email }}
+                          </p>
+                        </div>
+
+                        <label class="mt-0.5 hidden shrink-0 cursor-pointer items-center md:inline-flex">
+                          <input
+                            type="checkbox"
+                            class="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary/30 dark:border-slate-600 dark:bg-slate-900"
+                            [checked]="item.isPaid"
+                            [disabled]="isSplitBillSaving(item)"
+                            [attr.aria-label]="(item.isPaid ? 'dashboard.markUnpaid' : 'dashboard.markPaid') | translate"
+                            [title]="(item.isPaid ? 'dashboard.markUnpaid' : 'dashboard.markPaid') | translate"
+                            (click)="$event.stopPropagation()"
+                            (change)="toggleSplitBillPaid(item, $event)"
+                          />
+                        </label>
+                      </div>
+
+                      <div class="mt-3 flex items-end justify-between gap-3 md:mt-0 md:block">
+                        <p
+                          class="text-sm font-bold text-slate-900 dark:text-white md:text-right"
+                          [class.line-through]="item.isPaid"
+                          [class.text-slate-400]="item.isPaid"
+                          [class.dark:text-slate-500]="item.isPaid"
+                        >
+                          {{ formatAmount(item.amount) }}
+                        </p>
+
+                        <label class="inline-flex shrink-0 cursor-pointer items-center md:hidden">
+                          <input
+                            type="checkbox"
+                            class="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary/30 dark:border-slate-600 dark:bg-slate-900"
+                            [checked]="item.isPaid"
+                            [disabled]="isSplitBillSaving(item)"
+                            [attr.aria-label]="(item.isPaid ? 'dashboard.markUnpaid' : 'dashboard.markPaid') | translate"
+                            [title]="(item.isPaid ? 'dashboard.markUnpaid' : 'dashboard.markPaid') | translate"
+                            (click)="$event.stopPropagation()"
+                            (change)="toggleSplitBillPaid(item, $event)"
+                          />
+                        </label>
+                      </div>
                     </div>
                   </div>
-                  <p
-                    class="mt-3 text-sm font-bold text-slate-900 dark:text-white md:mt-0 md:text-right"
-                  >
-                    {{ formatAmount(item.amount) }}
-                  </p>
                 </div>
 
                 <div
@@ -348,7 +422,7 @@ interface JoyConfigForm {
                     >pie_chart</span
                   >
                   <p class="text-sm text-slate-500 dark:text-slate-400 mt-2">
-                    No split details available yet.
+                    {{ 'dashboard.noSplitDetails' | translate }}
                   </p>
                 </div>
               </div>
@@ -383,22 +457,25 @@ interface JoyConfigForm {
               class="text-sm font-semibold text-slate-700 dark:text-slate-300"
               >{{ "joys.category" | translate }}</label
             >
-            <select
-              [(ngModel)]="joyConfigForm.category"
-              [disabled]="isSavingJoyConfig"
-              class="w-full rounded-xl border-transparent bg-slate-50 px-4 py-3 outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary/20 dark:bg-slate-800 dark:text-slate-100"
-            >
-              <option *ngFor="let cat of joyCategories" [value]="cat">
-                {{ cat }}
-              </option>
-            </select>
+            <div class="flex flex-wrap gap-2.5">
+              <button
+                *ngFor="let cat of joyCategories"
+                type="button"
+                (click)="joyConfigForm.category = cat"
+                [disabled]="isSavingJoyConfig"
+                [class]="getJoyConfigCategoryClasses(cat)"
+              >
+                <span class="material-symbols-outlined text-[18px]">{{ getCategoryIcon(cat) }}</span>
+                <span>{{ getCategoryLabel(cat) }}</span>
+              </button>
+            </div>
           </div>
 
           <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div class="flex flex-col gap-2">
               <label
                 class="text-sm font-semibold text-slate-700 dark:text-slate-300"
-                >Start date</label
+                >{{ "common.startDate" | translate }}</label
               >
               <input
                 [(ngModel)]="joyConfigForm.startDate"
@@ -411,7 +488,7 @@ interface JoyConfigForm {
             <div class="flex flex-col gap-2">
               <label
                 class="text-sm font-semibold text-slate-700 dark:text-slate-300"
-                >End date</label
+                >{{ "common.endDate" | translate }}</label
               >
               <input
                 [(ngModel)]="joyConfigForm.endDate"
@@ -462,9 +539,17 @@ export class DashboardComponent implements OnChanges, OnDestroy {
   joyConfigForm: JoyConfigForm = this.createEmptyJoyConfigForm();
   isSavingJoyConfig = false;
   joyConfigErrorMessage = "";
+  currentUserEmail = "";
+  savingPaidSummaryKeys = new Set<string>();
 
   private unsubscribeJoy: Unsubscribe | null = null;
   private unsubscribeGroups: Unsubscribe | null = null;
+  private groupExpensesUnsubscribers: Map<string, Unsubscribe> = new Map();
+  private groupExpensesMap: Map<string, JoyExpense[]> = new Map();
+  private readonly userSubscription: Subscription;
+  private lastSessionKey = '__uninitialized__';
+  private loadVersion = 0;
+  private readonly minimumLoadingDuration = 500;
 
   constructor(
     private readonly currencyService: CurrencyService,
@@ -472,24 +557,48 @@ export class DashboardComponent implements OnChanges, OnDestroy {
     private readonly joyService: JoyService,
     private readonly commonDialogService: CommonDialogService,
     private readonly translationService: TranslationService,
+    private readonly userSessionService: UserSessionService,
     private readonly ngZone: NgZone,
     private readonly cdr: ChangeDetectorRef
-  ) {}
-  @Output() dataLoaded = new EventEmitter<void>();
-  ngAfterViewInit(): void {
-    setTimeout(() => {
-      this.dataLoaded.emit();
-    }, 0);
+  ) {
+    this.userSubscription = this.userSessionService.user$.subscribe((user) => {
+      this.currentUserEmail = user?.email?.trim().toLowerCase() ?? "";
+      const nextSessionKey = user?.uid ?? 'guest';
+      if (this.lastSessionKey === nextSessionKey) {
+        return;
+      }
+
+      this.lastSessionKey = nextSessionKey;
+      if (this.joyId) {
+        this.subscribeToJoyData();
+      }
+    });
   }
+  @Output() dataLoaded = new EventEmitter<void>();
+  private lastLoadedJoyId = '';
   get totalSpent(): number {
-    return this.groupCards.reduce((sum, group) => sum + group.totalSpent, 0);
+    // Sum all expenses across groups converting each expense to system currency
+    let total = 0;
+    for (const [groupId, expenses] of this.groupExpensesMap.entries()) {
+      for (const exp of expenses) {
+        const sourceCurrency = (exp.currency as AppCurrency) ?? this.currencyService.currentCurrency();
+        const original = typeof exp.originalAmount === 'number' ? exp.originalAmount : exp.amount;
+        total += this.currencyService.convertUsingRateHeuristic(original, sourceCurrency);
+      }
+    }
+    return total;
   }
 
-  get totalYouOwe(): number {
-    return this.groupCards.reduce((sum, group) => {
-      if (group.balanceType === "owe") {
-        return sum + Math.abs(group.yourBalance);
+  get totalYouSpent(): number {
+    if (!this.currentUserEmail) {
+      return 0;
+    }
+
+    return this.splitBillSummaries.reduce((sum, item) => {
+      if (this.normalizeIdentity(item.email) === this.currentUserEmail) {
+        return sum + item.amount;
       }
+
       return sum;
     }, 0);
   }
@@ -500,16 +609,14 @@ export class DashboardComponent implements OnChanges, OnDestroy {
     }
   }
 
-  ngDoCheck(): void {
-    // Emit dataLoaded when selectedJoy is set (dashboard data loaded)
-    if (this.selectedJoy) {
-      this.dataLoaded.emit();
-    }
-  }
-
   ngOnDestroy(): void {
     this.unsubscribeJoy?.();
     this.unsubscribeGroups?.();
+    this.userSubscription.unsubscribe();
+    // cleanup expense listeners
+    this.groupExpensesUnsubscribers.forEach((unsub) => unsub());
+    this.groupExpensesUnsubscribers.clear();
+    this.groupExpensesMap.clear();
   }
 
   onNewGroupClick(): void {
@@ -533,6 +640,42 @@ export class DashboardComponent implements OnChanges, OnDestroy {
     if (type === "owe")
       return this.translationService.t("dashboard.status.owe");
     return this.translationService.t("dashboard.status.settled");
+  }
+
+  getCategoryLabel(category?: string | null): string {
+    if (!category) {
+      return this.translationService.t("groupDetail.general");
+    }
+
+    return this.translationService.tCategory(category);
+  }
+
+  getCategoryIcon(category: string): string {
+    const normalized = category.trim().toLowerCase();
+    const categoryIconMap: Record<string, string> = {
+      food: 'lunch_dining',
+      dinner: 'restaurant',
+      transport: 'commute',
+      trip: 'flight',
+      entertainment: 'movie',
+      utilities: 'bolt',
+      accommodation: 'hotel',
+      rent: 'home_work',
+      others: 'more_horiz',
+      general: 'category'
+    };
+
+    return categoryIconMap[normalized] ?? 'category';
+  }
+
+  getJoyConfigCategoryClasses(category: JoyCategory): string {
+    const base = 'inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold transition-all disabled:opacity-60';
+
+    if (this.joyConfigForm.category === category) {
+      return `${base} border-primary bg-primary/5 text-primary`;
+    }
+
+    return `${base} border-slate-200 bg-white text-slate-600 hover:border-primary/30 hover:bg-primary/5 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300`;
   }
 
   getBalanceText(group: JoyGroup): string {
@@ -571,7 +714,9 @@ export class DashboardComponent implements OnChanges, OnDestroy {
         const current = totals.get(key) ?? {
           key,
           name: member.name || this.translationService.t("groupDetail.unknown"),
+          email: member.email || "",
           amount: 0,
+          isPaid: true,
         };
         const amount = this.getMemberSplitAmountValue(
           group,
@@ -579,6 +724,8 @@ export class DashboardComponent implements OnChanges, OnDestroy {
           memberCount
         );
         current.amount += amount;
+        current.email = current.email || member.email || "";
+        current.isPaid = current.isPaid && !!member.isPaid;
         totals.set(key, current);
       }
     }
@@ -587,7 +734,11 @@ export class DashboardComponent implements OnChanges, OnDestroy {
   }
 
   private getMemberKey(member: JoyGroupMember): string {
-    return member.id || member.email || member.name;
+    return this.normalizeIdentity(member.email) || member.id || member.name;
+  }
+
+  private normalizeIdentity(value?: string | null): string {
+    return value?.trim().toLowerCase() ?? "";
   }
 
   private getMemberSplitAmountValue(
@@ -604,6 +755,80 @@ export class DashboardComponent implements OnChanges, OnDestroy {
     }
 
     return group.totalSpent / memberCount;
+  }
+
+  isSplitBillSaving(item: SplitBillSummary): boolean {
+    return this.savingPaidSummaryKeys.has(item.key);
+  }
+
+  async toggleSplitBillPaid(item: SplitBillSummary, event: Event): Promise<void> {
+    const input = event.target as HTMLInputElement;
+    const checked = input.checked;
+
+    if (!this.joyId || this.isSplitBillSaving(item)) {
+      input.checked = item.isPaid;
+      return;
+    }
+
+    const previousGroups = this.groupCards.map((group) => ({
+      ...group,
+      members: (group.members ?? []).map((member) => ({ ...member }))
+    }));
+
+    const nextGroups = this.groupCards.map((group) => {
+      let changed = false;
+      const nextMembers = (group.members ?? []).map((member) => {
+        if (!this.isSplitBillMemberMatch(item, member)) {
+          return member;
+        }
+
+        if (!!member.isPaid === checked) {
+          return member;
+        }
+
+        changed = true;
+        return {
+          ...member,
+          isPaid: checked
+        };
+      });
+
+      return changed ? { ...group, members: nextMembers } : group;
+    });
+
+    const changedGroups = nextGroups.filter((group, index) => group !== this.groupCards[index]);
+    if (!changedGroups.length) {
+      return;
+    }
+
+    this.savingPaidSummaryKeys.add(item.key);
+    this.groupCards = nextGroups;
+    this.cdr.detectChanges();
+
+    try {
+      await Promise.all(
+        changedGroups.map((group) => {
+          const { id, ...groupPayload } = group;
+          return this.joyService.updateJoyGroup(this.joyId, id, groupPayload);
+        })
+      );
+    } catch (error) {
+      console.error("Failed to update split bill paid state.", error);
+      this.groupCards = previousGroups;
+      input.checked = item.isPaid;
+    } finally {
+      this.savingPaidSummaryKeys.delete(item.key);
+      this.cdr.detectChanges();
+    }
+  }
+
+  private isSplitBillMemberMatch(item: SplitBillSummary, member: JoyGroupMember): boolean {
+    const itemEmail = this.normalizeIdentity(item.email);
+    if (itemEmail) {
+      return this.normalizeIdentity(member.email) === itemEmail;
+    }
+
+    return this.getMemberKey(member) === item.key;
   }
 
   onGroupClick(groupId: string): void {
@@ -761,26 +986,69 @@ export class DashboardComponent implements OnChanges, OnDestroy {
   }
 
   private subscribeToJoyData(): void {
+    const currentLoadVersion = ++this.loadVersion;
+    const loadStartedAt = Date.now();
+    let joyResolved = false;
+    let groupsResolved = false;
+
     this.unsubscribeJoy?.();
     this.unsubscribeGroups?.();
 
     if (!this.joyId) {
+      this.lastLoadedJoyId = '';
       this.selectedJoy = null;
       this.groupCards = [];
       this.cdr.detectChanges();
       return;
     }
 
+    this.selectedJoy = null;
+    this.groupCards = [];
+
+    const tryFinishLoading = () => {
+      if (!joyResolved || !groupsResolved || currentLoadVersion !== this.loadVersion) {
+        return;
+      }
+
+      const remainingDelay = Math.max(0, this.minimumLoadingDuration - (Date.now() - loadStartedAt));
+      setTimeout(() => {
+        if (currentLoadVersion !== this.loadVersion) {
+          return;
+        }
+
+        if (this.selectedJoy?.id && this.lastLoadedJoyId !== this.selectedJoy.id) {
+          this.lastLoadedJoyId = this.selectedJoy.id;
+          this.dataLoaded.emit();
+        }
+
+        this.cdr.detectChanges();
+      }, remainingDelay);
+    };
+
     this.unsubscribeJoy = this.joyService.listenToJoy(
       this.joyId,
       (joy) => {
         this.ngZone.run(() => {
+          if (currentLoadVersion !== this.loadVersion) {
+            return;
+          }
+
           this.selectedJoy = joy;
-          this.cdr.detectChanges();
+          joyResolved = true;
+          tryFinishLoading();
         });
       },
       (error) => {
         console.error("Failed to sync joy.", error);
+        this.ngZone.run(() => {
+          if (currentLoadVersion !== this.loadVersion) {
+            return;
+          }
+
+          this.selectedJoy = null;
+          joyResolved = true;
+          tryFinishLoading();
+        });
       }
     );
 
@@ -788,13 +1056,66 @@ export class DashboardComponent implements OnChanges, OnDestroy {
       this.joyId,
       (groups) => {
         this.ngZone.run(() => {
+          if (currentLoadVersion !== this.loadVersion) {
+            return;
+          }
+
           this.groupCards = groups;
-          this.cdr.detectChanges();
+          this.syncGroupExpensesListeners(groups);
+          groupsResolved = true;
+          tryFinishLoading();
         });
       },
       (error) => {
         console.error("Failed to sync groups.", error);
+        this.ngZone.run(() => {
+          if (currentLoadVersion !== this.loadVersion) {
+            return;
+          }
+
+          this.groupCards = [];
+          groupsResolved = true;
+          tryFinishLoading();
+        });
       }
     );
+  }
+
+  private syncGroupExpensesListeners(groups: JoyGroup[]) {
+    const activeIds = new Set(groups.map((g) => g.id));
+
+    // Unsubscribe removed groups
+    Array.from(this.groupExpensesUnsubscribers.keys()).forEach((id) => {
+      if (!activeIds.has(id)) {
+        this.groupExpensesUnsubscribers.get(id)?.();
+        this.groupExpensesUnsubscribers.delete(id);
+        this.groupExpensesMap.delete(id);
+      }
+    });
+
+    // Subscribe new groups
+    groups.forEach((group) => {
+      if (this.groupExpensesUnsubscribers.has(group.id)) return;
+
+      const unsub = this.joyService.listenToJoyGroupExpenses(
+        this.joyId,
+        group.id,
+        (expenses) => {
+          this.ngZone.run(() => {
+            this.groupExpensesMap.set(group.id, expenses);
+            this.cdr.detectChanges();
+          });
+        },
+        (error) => {
+          console.error('Failed to load expenses for group', group.id, error);
+          this.ngZone.run(() => {
+            this.groupExpensesMap.set(group.id, []);
+            this.cdr.detectChanges();
+          });
+        }
+      );
+
+      this.groupExpensesUnsubscribers.set(group.id, unsub);
+    });
   }
 }

@@ -1,9 +1,18 @@
 import { Injectable } from '@angular/core';
+import { getAuth } from 'firebase/auth';
 import { get, onValue, push, ref, remove, set, update, type Unsubscribe } from 'firebase/database';
 import { db } from '../firebase';
-import { CategoryStyle, Joy, JoyCategory, JoyExpense, JoyGroup, JoyStatus, StatusStyle } from '../types/joy.interface';
+import { CategoryStyle, Joy, JoyCategory, JoyCreator, JoyExpense, JoyGroup, JoyStatus, StatusStyle } from '../types/joy.interface';
 import { DataScopeService } from './data-scope.service';
 import { GuestStorageService } from './guest-storage.service';
+import { UserDirectoryService } from './user-directory.service';
+
+interface SharedJoyMembership {
+  ownerUid: string;
+  ownerName?: string;
+  ownerEmail?: string;
+  ownerAvatar?: string;
+}
 
 @Injectable({
   providedIn: 'root'
@@ -11,7 +20,8 @@ import { GuestStorageService } from './guest-storage.service';
 export class JoyService {
   constructor(
     private readonly dataScopeService: DataScopeService,
-    private readonly guestStorageService: GuestStorageService
+    private readonly guestStorageService: GuestStorageService,
+    private readonly userDirectoryService: UserDirectoryService
   ) {}
 
   private get joysReference() {
@@ -20,6 +30,11 @@ export class JoyService {
 
   private get guestJoysKey(): string {
     return this.dataScopeService.getGuestStorageKey('joys');
+  }
+
+  private get sharedJoysReference() {
+    const uid = this.dataScopeService.getCurrentUid();
+    return uid ? ref(db, `users/${uid}/sharedJoys`) : null;
   }
 
   private readGuestJoysRecord(): Record<string, any> {
@@ -48,24 +63,121 @@ export class JoyService {
       };
     }
 
-    return onValue(
+    const ownedJoyMap = new Map<string, Joy>();
+    const sharedJoyMap = new Map<string, Joy>();
+    const sharedJoyUnsubscribers = new Map<string, Unsubscribe>();
+    const pendingSharedInitialJoyIds = new Set<string>();
+    let ownedResolved = false;
+    let sharedMembershipsResolved = false;
+
+    const emitJoys = () => {
+      if (!ownedResolved || !sharedMembershipsResolved || pendingSharedInitialJoyIds.size > 0) {
+        return;
+      }
+
+      const merged = [...ownedJoyMap.values(), ...sharedJoyMap.values()]
+        .sort((a, b) => b.date.localeCompare(a.date));
+      onJoysChanged(merged);
+    };
+
+    const ownedJoysUnsubscribe = onValue(
       this.joysReference,
       (snapshot) => {
-        if (!snapshot.exists()) {
-          onJoysChanged([]);
-          return;
+        ownedJoyMap.clear();
+
+        if (snapshot.exists()) {
+          const joysData = snapshot.val() as Record<string, unknown>;
+          Object.entries(joysData).forEach(([joyId, joyData]) => {
+            ownedJoyMap.set(joyId, this.mapJoyDocument(joyId, joyData as Partial<Omit<Joy, 'id'>>));
+          });
         }
-        const joysData = snapshot.val() as Record<string, unknown>;
-        const joys = Object.entries(joysData)
-          .map(([joyId, joyData]) => this.mapJoyDocument(joyId, joyData as Partial<Omit<Joy, 'id'>>))
-          .sort((a, b) => b.date.localeCompare(a.date));
-        onJoysChanged(joys);
+
+        ownedResolved = true;
+        emitJoys();
       },
       (error) => {
+        ownedResolved = true;
         onJoysChanged([]);
         onError(error);
       }
     );
+
+    const sharedReference = this.sharedJoysReference;
+    if (!sharedReference) {
+      sharedMembershipsResolved = true;
+      emitJoys();
+      return ownedJoysUnsubscribe;
+    }
+
+    const sharedMembershipsUnsubscribe = onValue(
+      sharedReference,
+      (snapshot) => {
+        const memberships = snapshot.exists() ? snapshot.val() as Record<string, SharedJoyMembership> : {};
+        const activeJoyIds = new Set(Object.keys(memberships));
+
+        Array.from(sharedJoyUnsubscribers.keys()).forEach((joyId) => {
+          if (!activeJoyIds.has(joyId)) {
+            sharedJoyUnsubscribers.get(joyId)?.();
+            sharedJoyUnsubscribers.delete(joyId);
+            sharedJoyMap.delete(joyId);
+            pendingSharedInitialJoyIds.delete(joyId);
+          }
+        });
+
+        Object.entries(memberships).forEach(([joyId, membership]) => {
+          if (sharedJoyUnsubscribers.has(joyId)) {
+            return;
+          }
+
+          pendingSharedInitialJoyIds.add(joyId);
+          const joyRef = ref(db, `users/${membership.ownerUid}/joys/${joyId}`);
+          const unsubscribeSharedJoy = onValue(
+            joyRef,
+            (joySnapshot) => {
+              if (!joySnapshot.exists()) {
+                sharedJoyMap.delete(joyId);
+                pendingSharedInitialJoyIds.delete(joyId);
+                emitJoys();
+                return;
+              }
+
+              sharedJoyMap.set(
+                joyId,
+                this.mapJoyDocument(
+                  joyId,
+                  joySnapshot.val() as Partial<Omit<Joy, 'id'>>,
+                  this.toCreatorFromMembership(membership)
+                )
+              );
+              pendingSharedInitialJoyIds.delete(joyId);
+              emitJoys();
+            },
+            (error) => {
+              pendingSharedInitialJoyIds.delete(joyId);
+              onError(error);
+              emitJoys();
+            }
+          );
+
+          sharedJoyUnsubscribers.set(joyId, unsubscribeSharedJoy);
+        });
+
+        sharedMembershipsResolved = true;
+        emitJoys();
+      },
+      (error) => {
+        sharedMembershipsResolved = true;
+        onError(error);
+        emitJoys();
+      }
+    );
+
+    return () => {
+      ownedJoysUnsubscribe();
+      sharedMembershipsUnsubscribe();
+      sharedJoyUnsubscribers.forEach((unsubscribe) => unsubscribe());
+      sharedJoyUnsubscribers.clear();
+    };
   }
 
   listenToJoy(joyId: string, onJoyChanged: (joy: Joy | null) => void, onError: (error: unknown) => void): Unsubscribe {
@@ -88,28 +200,66 @@ export class JoyService {
       };
     }
 
-    return onValue(
-      ref(db, `${this.dataScopeService.getScopedPath('joys')}/${joyId}`),
-      (snapshot) => {
-        if (!snapshot.exists()) {
+    const currentUid = this.dataScopeService.getCurrentUid();
+    let unsubscribeOwner: Unsubscribe | null = null;
+    let unsubscribeActive: Unsubscribe | null = null;
+    let disposed = false;
+
+    unsubscribeOwner = this.listenToJoyOwnerUid(
+      joyId,
+      (ownerUid, membership) => {
+        if (disposed) {
+          return;
+        }
+
+        unsubscribeActive?.();
+        unsubscribeActive = null;
+
+        if (!ownerUid) {
           onJoyChanged(null);
           return;
         }
-        const joyData = snapshot.val() as Partial<Omit<Joy, 'id'>>;
-        onJoyChanged(this.mapJoyDocument(joyId, joyData));
+
+        unsubscribeActive = onValue(
+          ref(db, `users/${ownerUid}/joys/${joyId}`),
+          (snapshot) => {
+            if (!snapshot.exists()) {
+              onJoyChanged(null);
+              return;
+            }
+
+            const joyData = snapshot.val() as Partial<Omit<Joy, 'id'>>;
+            onJoyChanged(
+              this.mapJoyDocument(
+                joyId,
+                joyData,
+                ownerUid !== currentUid && membership ? this.toCreatorFromMembership(membership) : undefined
+              )
+            );
+          },
+          onError
+        );
       },
       onError
     );
+
+    return () => {
+      disposed = true;
+      unsubscribeOwner?.();
+      unsubscribeActive?.();
+    };
   }
 
   async addJoy(joyData: Omit<Joy, 'id'>): Promise<Joy> {
+    const creator = await this.getCurrentCreator();
     const payload = {
       joyName: joyData.joyName,
       category: joyData.category,
       date: joyData.date,
       totalAmount: joyData.totalAmount,
       yourShare: joyData.yourShare,
-      status: joyData.status
+      status: joyData.status,
+      createdBy: creator
     };
 
     if (this.dataScopeService.isGuest()) {
@@ -118,12 +268,12 @@ export class JoyService {
       const id = crypto.randomUUID();
       joys[id] = payload;
       this.writeGuestJoysRecord(joys);
-      return { id, ...joyData };
+      return { id, ...joyData, createdBy: creator };
     }
 
     const joyRef = push(this.joysReference);
     await set(joyRef, payload);
-    return { id: joyRef.key ?? crypto.randomUUID(), ...joyData };
+    return { id: joyRef.key ?? crypto.randomUUID(), ...joyData, createdBy: creator };
   }
 
   async updateJoy(
@@ -163,7 +313,12 @@ export class JoyService {
       };
     }
 
-    await update(ref(db, `${this.dataScopeService.getScopedPath('joys')}/${joyId}`), payload);
+    const ownerUid = await this.resolveJoyOwnerUid(joyId);
+    if (!ownerUid) {
+      throw new Error('Joy not found');
+    }
+
+    await update(ref(db, `users/${ownerUid}/joys/${joyId}`), payload);
 
     return {
       id: joyId,
@@ -214,21 +369,50 @@ export class JoyService {
       };
     }
 
-    return onValue(
-      ref(db, `${this.dataScopeService.getScopedPath('joys')}/${joyId}/groups`),
-      (snapshot) => {
-        if (!snapshot.exists()) {
+    let unsubscribeOwner: Unsubscribe | null = null;
+    let unsubscribeActive: Unsubscribe | null = null;
+    let disposed = false;
+
+    unsubscribeOwner = this.listenToJoyOwnerUid(
+      joyId,
+      (ownerUid) => {
+        if (disposed) {
+          return;
+        }
+
+        unsubscribeActive?.();
+        unsubscribeActive = null;
+
+        if (!ownerUid) {
           onGroupsChanged([]);
           return;
         }
-        const groupsData = snapshot.val() as Record<string, Omit<JoyGroup, 'id'>>;
-        const groups = Object.entries(groupsData)
-          .map(([id, value]) => ({ id, ...value }))
-          .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-        onGroupsChanged(groups);
+
+        unsubscribeActive = onValue(
+          ref(db, `users/${ownerUid}/joys/${joyId}/groups`),
+          (snapshot) => {
+            if (!snapshot.exists()) {
+              onGroupsChanged([]);
+              return;
+            }
+
+            const groupsData = snapshot.val() as Record<string, Omit<JoyGroup, 'id'>>;
+            const groups = Object.entries(groupsData)
+              .map(([id, value]) => ({ id, ...value }))
+              .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+            onGroupsChanged(groups);
+          },
+          onError
+        );
       },
       onError
     );
+
+    return () => {
+      disposed = true;
+      unsubscribeOwner?.();
+      unsubscribeActive?.();
+    };
   }
 
   listenToJoyGroup(
@@ -256,18 +440,47 @@ export class JoyService {
       };
     }
 
-    return onValue(
-      ref(db, `${this.dataScopeService.getScopedPath('joys')}/${joyId}/groups/${groupId}`),
-      (snapshot) => {
-        if (!snapshot.exists()) {
+    let unsubscribeOwner: Unsubscribe | null = null;
+    let unsubscribeActive: Unsubscribe | null = null;
+    let disposed = false;
+
+    unsubscribeOwner = this.listenToJoyOwnerUid(
+      joyId,
+      (ownerUid) => {
+        if (disposed) {
+          return;
+        }
+
+        unsubscribeActive?.();
+        unsubscribeActive = null;
+
+        if (!ownerUid) {
           onGroupChanged(null);
           return;
         }
-        const groupData = snapshot.val() as Omit<JoyGroup, 'id'>;
-        onGroupChanged({ id: groupId, ...groupData });
+
+        unsubscribeActive = onValue(
+          ref(db, `users/${ownerUid}/joys/${joyId}/groups/${groupId}`),
+          (snapshot) => {
+            if (!snapshot.exists()) {
+              onGroupChanged(null);
+              return;
+            }
+
+            const groupData = snapshot.val() as Omit<JoyGroup, 'id'>;
+            onGroupChanged({ id: groupId, ...groupData });
+          },
+          onError
+        );
       },
       onError
     );
+
+    return () => {
+      disposed = true;
+      unsubscribeOwner?.();
+      unsubscribeActive?.();
+    };
   }
 
   async addGroupToJoy(joyId: string, groupData: Omit<JoyGroup, 'id'>): Promise<JoyGroup> {
@@ -284,8 +497,14 @@ export class JoyService {
       return { id, ...groupData };
     }
 
-    const groupRef = push(ref(db, `${this.dataScopeService.getScopedPath('joys')}/${joyId}/groups`));
+    const ownerUid = await this.resolveJoyOwnerUid(joyId);
+    if (!ownerUid) {
+      throw new Error('Joy not found');
+    }
+
+    const groupRef = push(ref(db, `users/${ownerUid}/joys/${joyId}/groups`));
     await set(groupRef, groupData);
+    await this.syncSharedJoyAccess(joyId, ownerUid);
     return { id: groupRef.key ?? crypto.randomUUID(), ...groupData };
   }
 
@@ -305,7 +524,13 @@ export class JoyService {
       return { id: groupId, ...groupData };
     }
 
-    await update(ref(db, `${this.dataScopeService.getScopedPath('joys')}/${joyId}/groups/${groupId}`), groupData);
+    const ownerUid = await this.resolveJoyOwnerUid(joyId);
+    if (!ownerUid) {
+      throw new Error('Joy not found');
+    }
+
+    await update(ref(db, `users/${ownerUid}/joys/${joyId}/groups/${groupId}`), groupData);
+    await this.syncSharedJoyAccess(joyId, ownerUid);
     return { id: groupId, ...groupData };
   }
 
@@ -337,21 +562,50 @@ export class JoyService {
       };
     }
 
-    return onValue(
-      ref(db, `${this.dataScopeService.getScopedPath('joys')}/${joyId}/groups/${groupId}/expenses`),
-      (snapshot) => {
-        if (!snapshot.exists()) {
+    let unsubscribeOwner: Unsubscribe | null = null;
+    let unsubscribeActive: Unsubscribe | null = null;
+    let disposed = false;
+
+    unsubscribeOwner = this.listenToJoyOwnerUid(
+      joyId,
+      (ownerUid) => {
+        if (disposed) {
+          return;
+        }
+
+        unsubscribeActive?.();
+        unsubscribeActive = null;
+
+        if (!ownerUid) {
           onExpensesChanged([]);
           return;
         }
-        const expensesData = snapshot.val() as Record<string, Omit<JoyExpense, 'id'>>;
-        const expenses = Object.entries(expensesData)
-          .map(([id, value]) => ({ id, ...value }))
-          .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-        onExpensesChanged(expenses);
+
+        unsubscribeActive = onValue(
+          ref(db, `users/${ownerUid}/joys/${joyId}/groups/${groupId}/expenses`),
+          (snapshot) => {
+            if (!snapshot.exists()) {
+              onExpensesChanged([]);
+              return;
+            }
+
+            const expensesData = snapshot.val() as Record<string, Omit<JoyExpense, 'id'>>;
+            const expenses = Object.entries(expensesData)
+              .map(([id, value]) => ({ id, ...value }))
+              .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+            onExpensesChanged(expenses);
+          },
+          onError
+        );
       },
       onError
     );
+
+    return () => {
+      disposed = true;
+      unsubscribeOwner?.();
+      unsubscribeActive?.();
+    };
   }
 
   async addExpenseToJoyGroup(
@@ -385,11 +639,16 @@ export class JoyService {
       };
     }
 
-    const expenseRef = push(ref(db, `${this.dataScopeService.getScopedPath('joys')}/${joyId}/groups/${groupId}/expenses`));
+    const ownerUid = await this.resolveJoyOwnerUid(joyId);
+    if (!ownerUid) {
+      throw new Error('Joy not found');
+    }
+
+    const expenseRef = push(ref(db, `users/${ownerUid}/joys/${joyId}/groups/${groupId}/expenses`));
     await set(expenseRef, { ...expenseData, createdAt });
 
-    const groupRef = ref(db, `${this.dataScopeService.getScopedPath('joys')}/${joyId}/groups/${groupId}`);
-    const currentTotal = (await this.getGroupTotalSpent(joyId, groupId)) ?? 0;
+    const groupRef = ref(db, `users/${ownerUid}/joys/${joyId}/groups/${groupId}`);
+    const currentTotal = (await this.getGroupTotalSpent(joyId, groupId, ownerUid)) ?? 0;
     await update(groupRef, { totalSpent: currentTotal + expenseData.amount });
 
     return {
@@ -421,22 +680,32 @@ export class JoyService {
       return;
     }
 
-    await remove(ref(db, `${this.dataScopeService.getScopedPath('joys')}/${joyId}/groups/${groupId}/expenses/${expenseId}`));
+    const ownerUid = await this.resolveJoyOwnerUid(joyId);
+    if (!ownerUid) {
+      throw new Error('Joy not found');
+    }
 
-    const groupRef = ref(db, `${this.dataScopeService.getScopedPath('joys')}/${joyId}/groups/${groupId}`);
-    const currentTotal = (await this.getGroupTotalSpent(joyId, groupId)) ?? 0;
+    await remove(ref(db, `users/${ownerUid}/joys/${joyId}/groups/${groupId}/expenses/${expenseId}`));
+
+    const groupRef = ref(db, `users/${ownerUid}/joys/${joyId}/groups/${groupId}`);
+    const currentTotal = (await this.getGroupTotalSpent(joyId, groupId, ownerUid)) ?? 0;
     const nextTotal = Math.max(0, currentTotal - expenseAmount);
     await update(groupRef, { totalSpent: nextTotal });
   }
 
-  private async getGroupTotalSpent(joyId: string, groupId: string): Promise<number | null> {
+  private async getGroupTotalSpent(joyId: string, groupId: string, ownerUid?: string): Promise<number | null> {
     if (this.dataScopeService.isGuest()) {
       const joys = this.readGuestJoysRecord();
       const total = joys[joyId]?.groups?.[groupId]?.totalSpent;
       return typeof total === 'number' ? total : 0;
     }
 
-    const snapshot = await get(ref(db, `${this.dataScopeService.getScopedPath('joys')}/${joyId}/groups/${groupId}/totalSpent`));
+    const resolvedOwnerUid = ownerUid ?? await this.resolveJoyOwnerUid(joyId);
+    if (!resolvedOwnerUid) {
+      return 0;
+    }
+
+    const snapshot = await get(ref(db, `users/${resolvedOwnerUid}/joys/${joyId}/groups/${groupId}/totalSpent`));
     return typeof snapshot.val() === 'number' ? snapshot.val() : 0;
   }
 
@@ -467,7 +736,7 @@ export class JoyService {
     return { textColor: 'text-amber-500 dark:text-amber-400', dotColor: 'bg-amber-500', animate: true };
   }
 
-  private mapJoyDocument(id: string, data: Partial<Omit<Joy, 'id'>>): Joy {
+  private mapJoyDocument(id: string, data: Partial<Omit<Joy, 'id'>>, fallbackCreator?: JoyCreator): Joy {
     const category = this.toCategory(data.category);
     const status = this.toStatus(data.status);
     const iconInfo = this.getCategoryIcon(category);
@@ -481,8 +750,243 @@ export class JoyService {
       status,
       icon: data.icon ?? iconInfo.icon,
       iconBg: data.iconBg ?? iconInfo.iconBg,
-      iconColor: data.iconColor ?? iconInfo.iconColor
+      iconColor: data.iconColor ?? iconInfo.iconColor,
+      createdBy: this.toCreator(data.createdBy) ?? fallbackCreator
     };
+  }
+
+  private toCreator(value: unknown): JoyCreator | undefined {
+    if (!value || typeof value !== 'object') {
+      return undefined;
+    }
+
+    const candidate = value as Partial<JoyCreator>;
+    if (!candidate.uid || !candidate.name) {
+      return undefined;
+    }
+
+    return {
+      uid: String(candidate.uid),
+      name: String(candidate.name),
+      email: String(candidate.email ?? ''),
+      avatar: candidate.avatar ? String(candidate.avatar) : undefined
+    };
+  }
+
+  private toCreatorFromMembership(membership: SharedJoyMembership): JoyCreator {
+    return {
+      uid: membership.ownerUid,
+      name: membership.ownerName || membership.ownerEmail || 'User',
+      email: membership.ownerEmail || '',
+      avatar: membership.ownerAvatar || undefined
+    };
+  }
+
+  private async resolveJoyOwnerUid(joyId: string): Promise<string | null> {
+    const currentUid = this.dataScopeService.getCurrentUid();
+    if (!currentUid) {
+      return null;
+    }
+
+    const ownSnapshot = await get(ref(db, `users/${currentUid}/joys/${joyId}`));
+    if (ownSnapshot.exists()) {
+      return currentUid;
+    }
+
+    const sharedSnapshot = await get(ref(db, `users/${currentUid}/sharedJoys/${joyId}`));
+    const sharedMembership = sharedSnapshot.exists() ? sharedSnapshot.val() as Partial<SharedJoyMembership> : null;
+    if (typeof sharedMembership?.ownerUid === 'string' && sharedMembership.ownerUid.trim()) {
+      return sharedMembership.ownerUid;
+    }
+
+    return new Promise<string | null>((resolve, reject) => {
+      let settled = false;
+      let unsubscribeOwnerWatcher: Unsubscribe | null = null;
+
+      const settle = (value: string | null) => {
+        if (settled) {
+          return;
+        }
+
+        settled = true;
+        clearTimeout(timeoutId);
+        unsubscribeOwnerWatcher?.();
+        resolve(value);
+      };
+
+      const timeoutId = window.setTimeout(() => settle(null), 500);
+
+      unsubscribeOwnerWatcher = this.listenToJoyOwnerUid(
+        joyId,
+        (ownerUid) => {
+          if (ownerUid) {
+            settle(ownerUid);
+          }
+        },
+        (error) => {
+          if (settled) {
+            return;
+          }
+
+          settled = true;
+          clearTimeout(timeoutId);
+          unsubscribeOwnerWatcher?.();
+          reject(error);
+        }
+      );
+    });
+  }
+
+  private listenToJoyOwnerUid(
+    joyId: string,
+    onOwnerChanged: (ownerUid: string | null, membership?: SharedJoyMembership) => void,
+    onError: (error: unknown) => void
+  ): Unsubscribe {
+    const currentUid = this.dataScopeService.getCurrentUid();
+    if (!currentUid) {
+      onOwnerChanged(null);
+      return () => {};
+    }
+
+    let ownResolved = false;
+    let ownExists = false;
+    let sharedResolved = false;
+    let sharedOwnerUid: string | null = null;
+    let sharedMembership: SharedJoyMembership | undefined;
+
+    const emitOwner = () => {
+      if (!ownResolved || !sharedResolved) {
+        return;
+      }
+
+      if (ownExists) {
+        onOwnerChanged(currentUid);
+        return;
+      }
+
+      onOwnerChanged(sharedOwnerUid, sharedMembership);
+    };
+
+    const ownUnsubscribe = onValue(
+      ref(db, `users/${currentUid}/joys/${joyId}`),
+      (snapshot) => {
+        ownExists = snapshot.exists();
+        ownResolved = true;
+        emitOwner();
+      },
+      onError
+    );
+
+    const sharedUnsubscribe = onValue(
+      ref(db, `users/${currentUid}/sharedJoys/${joyId}`),
+      (snapshot) => {
+        if (!snapshot.exists()) {
+          sharedOwnerUid = null;
+          sharedMembership = undefined;
+          sharedResolved = true;
+          emitOwner();
+          return;
+        }
+
+        const membership = snapshot.val() as Partial<SharedJoyMembership>;
+        sharedOwnerUid = typeof membership.ownerUid === 'string' && membership.ownerUid.trim()
+          ? membership.ownerUid
+          : null;
+        sharedMembership = sharedOwnerUid
+          ? {
+              ownerUid: sharedOwnerUid,
+              ownerName: membership.ownerName,
+              ownerEmail: membership.ownerEmail,
+              ownerAvatar: membership.ownerAvatar
+            }
+          : undefined;
+        sharedResolved = true;
+        emitOwner();
+      },
+      onError
+    );
+
+    return () => {
+      ownUnsubscribe();
+      sharedUnsubscribe();
+    };
+  }
+
+  private async getCurrentCreator(): Promise<JoyCreator> {
+    const currentUser = getAuth().currentUser;
+    const currentUid = this.dataScopeService.getCurrentUid();
+
+    if (!currentUser || !currentUid) {
+      return {
+        uid: 'guest-user',
+        name: 'Guest',
+        email: '',
+        avatar: undefined
+      };
+    }
+
+    const directoryUser = await this.userDirectoryService.getUserByUid(currentUid);
+
+    return {
+      uid: currentUid,
+      name: directoryUser?.displayName || currentUser.displayName || currentUser.email || 'User',
+      email: directoryUser?.email || currentUser.email || '',
+      avatar: directoryUser?.avatar || currentUser.photoURL || undefined
+    };
+  }
+
+  private async syncSharedJoyAccess(joyId: string, ownerUid: string): Promise<void> {
+    if (this.dataScopeService.isGuest()) {
+      return;
+    }
+
+    const groupsSnapshot = await get(ref(db, `users/${ownerUid}/joys/${joyId}/groups`));
+    const groupsData = groupsSnapshot.exists() ? groupsSnapshot.val() as Record<string, JoyGroup> : {};
+    const sharedUsers = await this.resolveSharedUsersFromGroups(groupsData, ownerUid);
+    const sharedWithRef = ref(db, `users/${ownerUid}/joys/${joyId}/sharedWith`);
+    const previousSnapshot = await get(sharedWithRef);
+    const previousSharedWith = previousSnapshot.exists() ? previousSnapshot.val() as Record<string, true> : {};
+    const nextSharedWith: Record<string, true> = {};
+    const ownerMetadata = await this.userDirectoryService.getUserByUid(ownerUid);
+    const membershipPayload: SharedJoyMembership = {
+      ownerUid,
+      ownerName: ownerMetadata?.displayName,
+      ownerEmail: ownerMetadata?.email,
+      ownerAvatar: ownerMetadata?.avatar
+    };
+
+    for (const user of sharedUsers) {
+      nextSharedWith[user.uid] = true;
+      await set(ref(db, `users/${user.uid}/sharedJoys/${joyId}`), membershipPayload);
+    }
+
+    for (const previousUid of Object.keys(previousSharedWith)) {
+      if (!nextSharedWith[previousUid]) {
+        await remove(ref(db, `users/${previousUid}/sharedJoys/${joyId}`));
+      }
+    }
+
+    if (Object.keys(nextSharedWith).length === 0) {
+      await remove(sharedWithRef);
+      return;
+    }
+
+    await set(sharedWithRef, nextSharedWith);
+  }
+
+  private async resolveSharedUsersFromGroups(groupsData: Record<string, JoyGroup>, ownerUid: string) {
+    const emails = new Set<string>();
+    Object.values(groupsData).forEach((group) => {
+      (group.members ?? []).forEach((member) => {
+        const normalizedEmail = member.email?.trim().toLowerCase();
+        if (normalizedEmail) {
+          emails.add(normalizedEmail);
+        }
+      });
+    });
+
+    const directoryUsers = await this.userDirectoryService.getAllUsers();
+    return directoryUsers.filter((user) => emails.has(user.email.trim().toLowerCase()) && user.uid !== ownerUid);
   }
 
   private toCategory(category: unknown): JoyCategory {

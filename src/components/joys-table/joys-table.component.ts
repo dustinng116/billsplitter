@@ -2,6 +2,7 @@ import { ChangeDetectorRef, Component, EventEmitter, NgZone, OnDestroy, OnInit, 
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { type Unsubscribe } from 'firebase/database';
+import { Subscription } from 'rxjs';
 import {
   CommonCellDefDirective,
   CommonColumnDefDirective,
@@ -13,9 +14,11 @@ import {
 import { CommonPaginationComponent } from '../shared-common/common-pagination/common-pagination.component';
 import { CommonDialogAction, CommonDialogService } from '../../services/common-dialog.service';
 import { TranslatePipe } from '../../pipes/translate.pipe';
+import { AvatarColorService } from '../../services/avatar-color.service';
 import { JoyService } from '../../services/joy.service';
 import { ActivityService } from '../../services/activity.service';
 import { TranslationService } from '../../services/translation.service';
+import { UserSessionService } from '../../services/user-session.service';
 import { Joy, JoyCategory } from '../../types/joy.interface';
 
 interface JoyForm {
@@ -68,15 +71,12 @@ interface JoyForm {
           {{ errorMessage }}
         </div>
 
-        <!-- Loading -->
-        <div *ngIf="isLoading" class="flex items-center gap-2 rounded-xl bg-white px-4 py-3 text-sm font-medium text-slate-500 shadow-sm dark:bg-slate-900 dark:text-slate-300">
-          <span class="material-symbols-outlined animate-spin text-base">progress_activity</span>
-          {{ 'joys.loading' | translate }}
-        </div>
-
         <!-- Table -->
         <joys-common-table
           [data]="pagedJoys"
+          [isLoading]="isLoading"
+          [loadingText]="t('joys.loading')"
+          [rowClick]="handleRowClick"
           [displayedColumns]="displayedColumns"
           [rowClass]="'transition-all hover:bg-slate-50 dark:hover:bg-slate-800/50'"
           [emptyText]="t('joys.empty')"
@@ -96,7 +96,7 @@ interface JoyForm {
           <ng-container appColumnDef="category">
             <ng-template appHeaderCellDef>{{ 'joys.category' | translate }}</ng-template>
             <ng-template appCellDef let-joy>
-              <span [class]="getCategoryClasses(joy.category)">{{ joy.category }}</span>
+              <span [class]="getCategoryClasses(joy.category)">{{ getCategoryLabel(joy.category) }}</span>
             </ng-template>
           </ng-container>
 
@@ -105,12 +105,27 @@ interface JoyForm {
             <ng-template appCellDef let-joy>{{ joy.date }}</ng-template>
           </ng-container>
 
+          <ng-container appColumnDef="createdBy" headerClass="min-w-[180px]">
+            <ng-template appHeaderCellDef>{{ 'joys.createdBy' | translate }}</ng-template>
+            <ng-template appCellDef let-joy>
+              <div class="flex items-center gap-3">
+                <div class="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full" [ngClass]="joy.createdBy?.avatar ? '' : getCreatorAvatarClasses(joy)">
+                  <img *ngIf="joy.createdBy?.avatar; else creatorInitial" [src]="joy.createdBy?.avatar" [alt]="getCreatorName(joy)" class="h-full w-full object-cover" />
+                  <ng-template #creatorInitial>
+                    <span class="text-[11px] font-bold">{{ getCreatorInitials(joy) }}</span>
+                  </ng-template>
+                </div>
+                <span class="truncate text-sm font-medium text-slate-700 dark:text-slate-200">{{ getCreatorName(joy) }}</span>
+              </div>
+            </ng-template>
+          </ng-container>
+
           <ng-container appColumnDef="action" headerClass="text-right w-36" cellClass="text-right">
             <ng-template appHeaderCellDef></ng-template>
             <ng-template appCellDef let-joy>
               <button
                 type="button"
-                (click)="joyRowClicked.emit(joy)"
+                (click)="$event.stopPropagation(); joyRowClicked.emit(joy)"
                 class="inline-flex items-center gap-1.5 rounded-lg bg-primary/10 px-3 py-1.5 text-xs font-bold text-primary transition-colors hover:bg-primary hover:text-white"
               >
                 <span class="material-symbols-outlined text-sm">dashboard</span>
@@ -132,8 +147,17 @@ interface JoyForm {
                   <div>
                     <div class="font-semibold text-slate-900 dark:text-slate-100">{{ joy.joyName }}</div>
                     <div class="mt-1 flex items-center gap-2 flex-wrap">
-                      <span [class]="getCategoryClasses(joy.category)">{{ joy.category }}</span>
+                      <span [class]="getCategoryClasses(joy.category)">{{ getCategoryLabel(joy.category) }}</span>
                       <span class="text-xs text-slate-400 dark:text-slate-500">{{ joy.date }}</span>
+                    </div>
+                    <div class="mt-2 flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+                      <div class="flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden rounded-full" [ngClass]="joy.createdBy?.avatar ? '' : getCreatorAvatarClasses(joy)">
+                        <img *ngIf="joy.createdBy?.avatar; else mobileCreatorInitial" [src]="joy.createdBy?.avatar" [alt]="getCreatorName(joy)" class="h-full w-full object-cover" />
+                        <ng-template #mobileCreatorInitial>
+                          <span class="text-[10px] font-bold">{{ getCreatorInitials(joy) }}</span>
+                        </ng-template>
+                      </div>
+                      <span>{{ 'joys.createdBy' | translate }}: {{ getCreatorName(joy) }}</span>
                     </div>
                   </div>
                 </div>
@@ -183,19 +207,21 @@ interface JoyForm {
             class="w-full rounded-xl border-transparent bg-slate-50 px-4 py-3 outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary/20 dark:bg-slate-800 dark:text-slate-100"
           />
         </div>
-        <div class="flex flex-col gap-2">
-          <label class="text-sm font-semibold text-slate-700 dark:text-slate-300">Category</label>
-          <select
-            [(ngModel)]="joyForm.category"
-            [disabled]="isSubmitting"
-            class="w-full rounded-xl border-transparent bg-slate-50 px-4 py-3 outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary/20 dark:bg-slate-800 dark:text-slate-100"
-          >
-            <option *ngFor="let cat of categories" [value]="cat">{{ cat }}</option>
-          </select>
-        </div>
+        <div class="flex flex-wrap gap-2.5">
+            <button
+              *ngFor="let cat of categories"
+              type="button"
+              (click)="joyForm.category = cat"
+              [disabled]="isSubmitting"
+              [class]="getCreateJoyCategoryClasses(cat)"
+            >
+              <span class="material-symbols-outlined text-[18px]">{{ getCategoryIcon(cat) }}</span>
+              <span>{{ getCategoryLabel(cat) }}</span>
+            </button>
+          </div>
         <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div class="flex flex-col gap-2">
-            <label class="text-sm font-semibold text-slate-700 dark:text-slate-300">Start date</label>
+            <label class="text-sm font-semibold text-slate-700 dark:text-slate-300">{{ 'common.startDate' | translate }}</label>
             <input
               [(ngModel)]="joyForm.startDate"
               [disabled]="isSubmitting"
@@ -204,7 +230,7 @@ interface JoyForm {
             />
           </div>
           <div class="flex flex-col gap-2">
-            <label class="text-sm font-semibold text-slate-700 dark:text-slate-300">End date</label>
+            <label class="text-sm font-semibold text-slate-700 dark:text-slate-300">{{ 'common.endDate' | translate }}</label>
             <input
               [(ngModel)]="joyForm.endDate"
               [disabled]="isSubmitting"
@@ -224,7 +250,7 @@ export class JoysTableComponent implements OnInit, OnDestroy {
   @ViewChild('createJoyDialog', { static: true }) createJoyDialog!: TemplateRef<unknown>;
 
   joys: Joy[] = [];
-  readonly displayedColumns = ['joyName', 'category', 'date', 'action'] as const;
+  readonly displayedColumns = ['joyName', 'category', 'date', 'createdBy', 'action'] as const;
   readonly categories: JoyCategory[] = [
     'Food', 'Dinner', 'Transport', 'Trip', 'Entertainment',
     'Utilities', 'Accommodation', 'Rent', 'Others', 'General'
@@ -237,23 +263,75 @@ export class JoysTableComponent implements OnInit, OnDestroy {
   dialogErrorMessage = '';
   joyForm: JoyForm = this.createEmptyForm();
   private unsubscribeJoys: Unsubscribe | null = null;
+  private userSubscription: Subscription | null = null;
+  private lastSessionKey = '__uninitialized__';
+  private loadingTimeoutId: ReturnType<typeof setTimeout> | null = null;
+  private activeLoadVersion = 0;
+  private readonly minimumLoadingDuration = 500;
+  readonly handleRowClick = (joy: Joy): void => {
+    this.joyRowClicked.emit(joy);
+  };
+
+  getCategoryLabel(category: string): string {
+    return this.translationService.tCategory(category);
+  }
+
+  getCategoryIcon(category: string): string {
+    const normalized = category.trim().toLowerCase();
+    const categoryIconMap: Record<string, string> = {
+      food: 'lunch_dining',
+      dinner: 'restaurant',
+      transport: 'commute',
+      trip: 'flight',
+      entertainment: 'movie',
+      utilities: 'bolt',
+      accommodation: 'hotel',
+      rent: 'home_work',
+      others: 'more_horiz',
+      general: 'category'
+    };
+
+    return categoryIconMap[normalized] ?? 'category';
+  }
+
+  getCreateJoyCategoryClasses(category: JoyCategory): string {
+    const base = 'inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold transition-all disabled:opacity-60';
+
+    if (this.joyForm.category === category) {
+      return `${base} border-primary bg-primary/5 text-primary`;
+    }
+
+    return `${base} border-slate-200 bg-white text-slate-600 hover:border-primary/30 hover:bg-primary/5 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300`;
+  }
 
   constructor(
     private readonly joyService: JoyService,
     private readonly commonDialogService: CommonDialogService,
     private readonly activityService: ActivityService,
+    private readonly avatarColorService: AvatarColorService,
     private readonly translationService: TranslationService,
+    private readonly userSessionService: UserSessionService,
     private readonly ngZone: NgZone,
     private readonly cdr: ChangeDetectorRef
   ) {}
 
   ngOnInit(): void {
-    this.loadJoys();
+    this.userSubscription = this.userSessionService.user$.subscribe((user) => {
+      const nextSessionKey = user?.uid ?? 'guest';
+      if (this.lastSessionKey === nextSessionKey) {
+        return;
+      }
+
+      this.lastSessionKey = nextSessionKey;
+      this.loadJoys();
+    });
   }
 
   ngOnDestroy(): void {
+    this.clearLoadingTimeout();
     this.unsubscribeJoys?.();
     this.unsubscribeJoys = null;
+    this.userSubscription?.unsubscribe();
   }
 
   openCreateJoyDialog(): void {
@@ -319,12 +397,34 @@ export class JoysTableComponent implements OnInit, OnDestroy {
     return `inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${styles.bgColor} ${styles.textColor} ${styles.darkBgColor} ${styles.darkTextColor}`;
   }
 
+  getCreatorName(joy: Joy): string {
+    return joy.createdBy?.name || joy.createdBy?.email || 'Guest';
+  }
+
+  getCreatorInitials(joy: Joy): string {
+    return this.getCreatorName(joy)
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part[0]?.toUpperCase() ?? '')
+      .join('') || 'GU';
+  }
+
+  getCreatorAvatarClasses(joy: Joy): string {
+    const colorSeed = joy.createdBy?.uid || joy.createdBy?.email || this.getCreatorName(joy) || joy.id;
+    return this.avatarColorService.getInitialAvatarClasses(colorSeed);
+  }
+
   private loadJoys(): void {
+    const loadVersion = ++this.activeLoadVersion;
+    const loadStartedAt = Date.now();
     this.isLoading = true;
     this.errorMessage = '';
+    this.clearLoadingTimeout();
     this.unsubscribeJoys?.();
 
-    const loadingTimeout = setTimeout(() => {
+    this.loadingTimeoutId = setTimeout(() => {
       if (this.isLoading) {
         this.isLoading = false;
         this.errorMessage = 'Connection timed out. Please check your network and Firebase rules, then refresh.';
@@ -335,23 +435,48 @@ export class JoysTableComponent implements OnInit, OnDestroy {
     this.unsubscribeJoys = this.joyService.listenToJoys(
       (joys) => {
         this.ngZone.run(() => {
-          clearTimeout(loadingTimeout);
-          this.joys = joys;
-          this.ensureValidPage();
-          this.isLoading = false;
-          this.cdr.detectChanges();
+          this.completeLoad(loadVersion, loadStartedAt, () => {
+            this.joys = joys;
+            this.ensureValidPage();
+            this.isLoading = false;
+            this.cdr.detectChanges();
+          });
         });
       },
       (error) => {
         this.ngZone.run(() => {
-          clearTimeout(loadingTimeout);
-          console.error('Unable to load joys.', error);
-          this.errorMessage = 'Unable to load joys right now. Please refresh and try again.';
-          this.isLoading = false;
-          this.cdr.detectChanges();
+          this.completeLoad(loadVersion, loadStartedAt, () => {
+            console.error('Unable to load joys.', error);
+            this.errorMessage = 'Unable to load joys right now. Please refresh and try again.';
+            this.isLoading = false;
+            this.cdr.detectChanges();
+          });
         });
       }
     );
+  }
+
+  private clearLoadingTimeout(): void {
+    if (this.loadingTimeoutId) {
+      clearTimeout(this.loadingTimeoutId);
+      this.loadingTimeoutId = null;
+    }
+  }
+
+  private completeLoad(loadVersion: number, loadStartedAt: number, apply: () => void): void {
+    if (loadVersion !== this.activeLoadVersion) {
+      return;
+    }
+
+    this.clearLoadingTimeout();
+    const remainingDelay = Math.max(0, this.minimumLoadingDuration - (Date.now() - loadStartedAt));
+    setTimeout(() => {
+      if (loadVersion !== this.activeLoadVersion) {
+        return;
+      }
+
+      apply();
+    }, remainingDelay);
   }
 
   private getCreateJoyActions(): CommonDialogAction[] {

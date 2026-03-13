@@ -54,14 +54,18 @@ export class CommonNoDataDefDirective {
   constructor(public readonly template: TemplateRef<unknown>) {}
 }
 
-import { FormsModule } from '@angular/forms';
-
 @Component({
   selector: 'joys-common-table',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule],
   template: `
     <div class="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
+      <div *ngIf="isLoading" class="flex min-h-[280px] flex-col items-center justify-center gap-3 px-6 py-12 text-center">
+        <span class="material-symbols-outlined animate-spin text-3xl text-primary">progress_activity</span>
+        <p class="text-sm font-semibold text-slate-500 dark:text-slate-400">{{ loadingText }}</p>
+      </div>
+
+      <ng-container *ngIf="!isLoading">
       <div class="overflow-x-auto hidden lg:block">
         <ng-container [ngTemplateOutlet]="dataTable"></ng-container>
       </div>
@@ -93,16 +97,11 @@ import { FormsModule } from '@angular/forms';
 
       <!-- Pagination/footer: desktop always, mobile only if >10 items -->
       <div *ngIf="showFooter && (isDesktop() || data.length > 10)" class="px-6 py-4 border-t border-slate-100 dark:border-slate-800">
-        <div class="flex flex-col sm:flex-row sm:items-center gap-2">
-          <label class="flex items-center gap-1 text-xs">
-            Page size:
-            <select [(ngModel)]="pageSize" class="border rounded px-1 py-0.5 text-xs">
-              <option *ngFor="let size of pageSizeOptions" [value]="size">{{ size }}</option>
-            </select>
-          </label>
+        <div class="flex justify-end">
           <ng-content select="[pagination]"></ng-content>
         </div>
       </div>
+      </ng-container>
     </div>
 
     <ng-template #dataTable>
@@ -122,6 +121,7 @@ import { FormsModule } from '@angular/forms';
           <tr
             *ngFor="let row of data; index as i; trackBy: trackByData"
             [class]="rowClass"
+            (click)="onRowSelected(row)"
           >
             <td
               *ngFor="let col of resolvedColumns; trackBy: trackByColumn"
@@ -149,6 +149,9 @@ import { FormsModule } from '@angular/forms';
 export class CommonTableComponent<T = unknown> {
   @Input() data: readonly T[] = [];
   @Input() displayedColumns: readonly string[] | null = null;
+  @Input() isLoading = false;
+  @Input() loadingText = 'Loading...';
+  @Input() rowClick?: (row: T) => void;
 
   @Input() tableClass = 'w-full text-left border-collapse';
   @Input() headerRowClass =
@@ -161,9 +164,6 @@ export class CommonTableComponent<T = unknown> {
   @Input() emptyText = 'No data';
 
   @Input() showFooter = true;
-  pageSizeOptions = [5, 10, 20];
-  pageSize = 10;
-  page = 0;
 
   // Helper to detect desktop (for template logic)
   isDesktop(): boolean {
@@ -177,6 +177,10 @@ export class CommonTableComponent<T = unknown> {
   @ContentChild(CommonNoDataDefDirective) readonly noDataDef?: CommonNoDataDefDirective;
 
   trackByColumn = (_: number, col: CommonColumnDefDirective<T>) => col.name;
+
+  onRowSelected(row: T): void {
+    this.rowClick?.(row);
+  }
 
   get resolvedColumns(): CommonColumnDefDirective<T>[] {
     const all = (this.columnDefs?.toArray() ?? []).filter((c) => !!c.name);

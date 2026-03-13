@@ -39,10 +39,10 @@ import { ActivityLog, ActivityType } from '../../types/activity.interface';
 
               <div class="min-w-0 flex-1">
                 <div class="flex flex-wrap items-center justify-between gap-2">
-                  <h3 class="text-sm font-bold text-slate-900 dark:text-slate-100">{{ activity.title }}</h3>
+                  <h3 class="text-sm font-bold text-slate-900 dark:text-slate-100">{{ getLocalizedActivityTitle(activity) }}</h3>
                   <time class="text-xs text-slate-400">{{ formatDateTime(activity.createdAt) }}</time>
                 </div>
-                <p class="mt-1 text-sm text-slate-600 dark:text-slate-300">{{ activity.description }}</p>
+                <p class="mt-1 text-sm text-slate-600 dark:text-slate-300">{{ getLocalizedActivityDescription(activity) }}</p>
               </div>
             </div>
           </article>
@@ -62,6 +62,8 @@ export class ActivitiesPageComponent implements OnInit, OnDestroy {
   isLoading = false;
   errorMessage = '';
   private unsubscribeActivities: Unsubscribe | null = null;
+  private loadVersion = 0;
+  private readonly minimumLoadingDuration = 500;
 
   constructor(
     private readonly activityService: ActivityService,
@@ -69,6 +71,34 @@ export class ActivitiesPageComponent implements OnInit, OnDestroy {
     private readonly ngZone: NgZone,
     private readonly cdr: ChangeDetectorRef
   ) {}
+
+  getLocalizedActivityTitle(activity: ActivityLog): string {
+    const typeKey = `activities.type.${activity.type}`;
+    const metadata = activity.metadata ?? {};
+
+    // prepare params for translation
+    const params: Record<string, string | number | boolean> = {};
+    if (metadata['joyName']) params['joyName'] = String(metadata['joyName']);
+    if (metadata['groupName']) params['groupName'] = String(metadata['groupName']);
+    if (metadata['expenseTitle']) params['expenseTitle'] = String(metadata['expenseTitle']);
+    if (metadata['friendName']) params['friendName'] = String(metadata['friendName']);
+    if (metadata['language']) params['language'] = String(metadata['language']);
+    if (metadata['currency']) params['currency'] = String(metadata['currency']);
+    if (metadata['theme']) params['theme'] = String(metadata['theme']);
+
+    const translated = this.translationService.t(typeKey, params as any);
+    // if translation returns the key back, fall back to stored title
+    if (!translated || translated === typeKey) {
+      return activity.title;
+    }
+
+    return translated;
+  }
+
+  getLocalizedActivityDescription(activity: ActivityLog): string {
+    // Prefer stored description; could localize further if needed
+    return activity.description || '';
+  }
 
   ngOnInit(): void {
     this.loadActivities();
@@ -108,6 +138,8 @@ export class ActivitiesPageComponent implements OnInit, OnDestroy {
   }
 
   private loadActivities(): void {
+    const currentLoad = ++this.loadVersion;
+    const loadStartedAt = Date.now();
     this.isLoading = true;
     this.errorMessage = '';
     this.unsubscribeActivities?.();
@@ -115,13 +147,20 @@ export class ActivitiesPageComponent implements OnInit, OnDestroy {
     this.unsubscribeActivities = this.activityService.listenToActivities(
       (activities) => {
         this.ngZone.run(() => {
-          this.activities = activities;
-          this.isLoading = false;
-          this.cdr.detectChanges();
+          if (currentLoad !== this.loadVersion) return;
+
+          const remaining = Math.max(0, this.minimumLoadingDuration - (Date.now() - loadStartedAt));
+          setTimeout(() => {
+            if (currentLoad !== this.loadVersion) return;
+            this.activities = activities;
+            this.isLoading = false;
+            this.cdr.detectChanges();
+          }, remaining);
         });
       },
       (error) => {
         this.ngZone.run(() => {
+          if (currentLoad !== this.loadVersion) return;
           console.error('Unable to load activities.', error);
           this.errorMessage = 'Unable to load activities right now. Please refresh and try again.';
           this.isLoading = false;

@@ -1,6 +1,7 @@
-import { Component, ViewChild } from "@angular/core";
+import { Component, OnDestroy, ViewChild } from "@angular/core";
 import { bootstrapApplication } from "@angular/platform-browser";
 import { CommonModule } from "@angular/common";
+import { Subscription } from "rxjs";
 import { OverlayLoadingComponent } from "./components/shared-common/overlay-loading/overlay-loading.component";
 import { HeaderComponent } from "./components/header/header.component";
 import { SidebarComponent } from "./components/sidebar/sidebar.component";
@@ -10,6 +11,7 @@ import { CommonDialogComponent } from "./components/shared-common/common-dialog/
 import { TranslatePipe } from "./pipes/translate.pipe";
 import { initializeFirebaseAnalytics } from "./firebase";
 import { AuthService } from "./services/auth.service";
+import { AppRouteService, type AppView } from "./services/app-route.service";
 
 @Component({
   selector: "joys-root",
@@ -32,6 +34,7 @@ import { AuthService } from "./services/auth.service";
       <div class="hidden lg:block">
         <joys-sidebar
           [collapsed]="sidebarCollapsed"
+          [activeView]="currentRouteView"
           [externalOverlay]="sidebarOverlay"
           (externalOverlayChange)="sidebarOverlay = $event"
           (collapseToggle)="sidebarCollapsed = $event"
@@ -55,9 +58,42 @@ import { AuthService } from "./services/auth.service";
       </div>
 
       <div
-        class="pointer-events-none fixed inset-x-0 bottom-0 z-50 flex justify-center px-4 pb-[calc(env(safe-area-inset-bottom)+2rem)] lg:hidden"
+        class="pointer-events-none fixed inset-x-0 bottom-0 z-50 flex justify-center px-3 pb-[calc(env(safe-area-inset-bottom)+0.9rem)] lg:hidden"
       >
-        <div class="liquid-dock-layout pointer-events-auto w-full items-end">
+        <div class="mobile-dock-shell liquid-dock-layout pointer-events-auto w-full max-w-4xl">
+          <button
+            *ngIf="isFriendsView()"
+            type="button"
+            (click)="openAddFriendFromDock()"
+            class="liquid-fab liquid-dock-floating-action liquid-glass-entrance"
+            [attr.aria-label]="'friends.add' | translate"
+            [title]="'friends.add' | translate"
+          >
+            <span class="material-symbols-outlined text-[22px]">person_add</span>
+          </button>
+
+          <button
+            *ngIf="isDashboardView()"
+            type="button"
+            (click)="onCreateGroupClicked()"
+            class="liquid-fab liquid-dock-floating-action liquid-glass-entrance"
+            [attr.aria-label]="'newGroup.title' | translate"
+            [title]="'newGroup.title' | translate"
+          >
+            <span class="material-symbols-outlined text-[22px]">group_add</span>
+          </button>
+
+          <button
+            *ngIf="isGroupDetailView()"
+            type="button"
+            (click)="openAddExpenseFromDock()"
+            class="liquid-fab liquid-dock-floating-action liquid-glass-entrance"
+            [attr.aria-label]="'groupDetail.addExpense' | translate"
+            [title]="'groupDetail.addExpense' | translate"
+          >
+            <span class="material-symbols-outlined text-[22px]">add_circle</span>
+          </button>
+
           <nav
             class="liquid-glass-dock liquid-glass-entrance w-full"
             [attr.aria-label]="'mobileNav.activities' | translate"
@@ -124,45 +160,6 @@ import { AuthService } from "./services/auth.service";
               </button>
             </div>
           </nav>
-
-          <button
-            *ngIf="isFriendsView()"
-            type="button"
-            (click)="openAddFriendFromDock()"
-            class="liquid-glass-dock liquid-dock-side-button liquid-glass-entrance"
-            [attr.aria-label]="'friends.add' | translate"
-            [title]="'friends.add' | translate"
-          >
-            <span class="material-symbols-outlined text-[20px]"
-              >person_add</span
-            >
-          </button>
-
-          <button
-            *ngIf="isDashboardView()"
-            type="button"
-            (click)="onCreateGroupClicked()"
-            class="liquid-glass-dock liquid-dock-side-button liquid-glass-entrance"
-            [attr.aria-label]="'newGroup.title' | translate"
-            [title]="'newGroup.title' | translate"
-          >
-            <span class="material-symbols-outlined text-[20px]"
-              >add_circle</span
-            >
-          </button>
-
-          <button
-            *ngIf="isGroupDetailView()"
-            type="button"
-            (click)="openAddExpenseFromDock()"
-            class="liquid-glass-dock liquid-dock-side-button liquid-glass-entrance"
-            [attr.aria-label]="'groupDetail.addExpense' | translate"
-            [title]="'groupDetail.addExpense' | translate"
-          >
-            <span class="material-symbols-outlined text-[20px]"
-              >add_circle</span
-            >
-          </button>
         </div>
       </div>
     </div>
@@ -176,12 +173,25 @@ import { AuthService } from "./services/auth.service";
 })
 export class App {
   globalLoading = false;
+  currentRouteView: AppView = "joys-table";
+  selectedJoyId = "";
+  selectedGroupId = "";
   private touchStartX: number | null = null;
   private touchStartY: number | null = null;
   private touchStartTime: number | null = null;
+  private readonly routeSubscription: Subscription;
 
-  constructor(private authService: AuthService) {
+  constructor(
+    private authService: AuthService,
+    private readonly appRouteService: AppRouteService
+  ) {
     AuthService.exposeToWindow(this.authService);
+
+    this.routeSubscription = this.appRouteService.state$.subscribe((state) => {
+      this.currentRouteView = state.view;
+      this.selectedJoyId = state.selectedJoyId;
+      this.selectedGroupId = state.selectedGroupId;
+    });
 
     if (typeof globalThis.window !== "undefined") {
       globalThis.window.addEventListener("touchstart", this.onTouchStart, {
@@ -237,23 +247,12 @@ export class App {
   }
 
   onNavigationChanged(route: string) {
-    // Show overlay loading if navigating from joys-table to dashboard
-    const from = this.mainContent?.currentView;
-    if (from === 'joys-table' && route === 'dashboard') {
-      this.globalLoading = true;
-      setTimeout(() => {
-        this.mainContent.onNavigationChanged(route);
-        setTimeout(() => {
-          this.globalLoading = false;
-        }, 500);
-      }, 0);
-    } else {
-      this.mainContent.onNavigationChanged(route);
-    }
+    this.globalLoading = false;
+    this.mainContent.onNavigationChanged(route);
   }
 
   onCreateGroupClicked(joyId = "") {
-    const selectedJoyId = joyId || this.mainContent?.selectedJoyId || "";
+    const selectedJoyId = joyId || this.selectedJoyId || this.mainContent?.selectedJoyId || "";
     this.newGroupDialog.open(selectedJoyId);
   }
 
@@ -269,9 +268,9 @@ export class App {
   isBottomNavActive(
     item: "joys" | "friends" | "activities" | "account"
   ): boolean {
-    const view = this.mainContent?.currentView ?? "joys-table";
+    const view = this.currentRouteView;
     return (
-      (item === "joys" && view === "joys-table") ||
+      (item === "joys" && ["joys-table", "dashboard", "group-detail"].includes(view)) ||
       (item === "friends" && view === "friends") ||
       (item === "activities" && view === "activities") ||
       (item === "account" && view === "account")
@@ -289,18 +288,15 @@ export class App {
   }
 
   isFriendsView(): boolean {
-    return (this.mainContent?.currentView ?? "joys-table") === "friends";
+    return this.currentRouteView === "friends";
   }
 
   isDashboardView(): boolean {
-    return (
-      (this.mainContent?.currentView ?? "") === "dashboard" &&
-      !!this.mainContent?.selectedJoyId
-    );
+    return this.currentRouteView === "dashboard" && !!this.selectedJoyId;
   }
 
   isGroupDetailView(): boolean {
-    return (this.mainContent?.currentView ?? "") === "group-detail";
+    return this.currentRouteView === "group-detail";
   }
 
   openAddFriendFromDock(): void {
@@ -309,6 +305,10 @@ export class App {
 
   openAddExpenseFromDock(): void {
     this.mainContent?.triggerAddExpense();
+  }
+
+  ngOnDestroy(): void {
+    this.routeSubscription.unsubscribe();
   }
 }
 

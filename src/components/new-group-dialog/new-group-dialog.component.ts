@@ -2,12 +2,15 @@ import { ChangeDetectorRef, Component, EventEmitter, HostListener, NgZone, OnDes
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { type Unsubscribe } from 'firebase/database';
+import { Subscription } from 'rxjs';
 import { CommonDialogAction, CommonDialogService } from '../../services/common-dialog.service';
 import { JoyService } from '../../services/joy.service';
 import { FriendService } from '../../services/friend.service';
 import { ActivityService } from '../../services/activity.service';
 import { TranslatePipe } from '../../pipes/translate.pipe';
 import { TranslationService } from '../../services/translation.service';
+import { UserSessionService } from '../../services/user-session.service';
+import { AvatarColorService } from '../../services/avatar-color.service';
 import { Friend } from '../../types/friend.interface';
 import { JoyGroup, JoyGroupMember } from '../../types/joy.interface';
 
@@ -24,6 +27,7 @@ interface GroupMember {
   phone?: string;
   avatar?: string;
   initials: string;
+  isPaid?: boolean;
 }
 
 interface NewGroupForm {
@@ -34,7 +38,7 @@ interface NewGroupForm {
   members: GroupMember[];
 }
 
-type GroupMemberIdentityFields = 'id' | 'name' | 'email' | 'phone' | 'avatar' | 'initials';
+type GroupMemberIdentityFields = 'id' | 'name' | 'email' | 'phone' | 'avatar' | 'initials' | 'isPaid';
 type EditableMemberIdentity = Pick<GroupMember, GroupMemberIdentityFields>;
 type PersistedMemberIdentity = Pick<JoyGroupMember, GroupMemberIdentityFields>;
 
@@ -96,7 +100,7 @@ type PersistedMemberIdentity = Pick<JoyGroupMember, GroupMemberIdentityFields>;
                   [(ngModel)]="groupForm.category"
                   class="w-full appearance-none rounded-xl border-transparent bg-slate-50 py-3 pl-12 pr-10 outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary/20 dark:bg-slate-800 dark:text-slate-100"
                 >
-                  <option *ngFor="let category of categories" [value]="category.id">{{ category.name }}</option>
+                  <option *ngFor="let category of categories" [value]="category.id">{{ getCategoryLabel(category.id) }}</option>
                 </select>
                 <span class="material-symbols-outlined pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-slate-400">expand_more</span>
               </div>
@@ -110,7 +114,7 @@ type PersistedMemberIdentity = Pick<JoyGroupMember, GroupMemberIdentityFields>;
                     type="button"
                   >
                     <span class="material-symbols-outlined" [class]="getCategoryIconClasses(category.id)">{{ category.icon }}</span>
-                    <span class="text-sm font-medium" [class]="getCategoryTextClasses(category.id)">{{ category.name }}</span>
+                    <span class="text-sm font-medium" [class]="getCategoryTextClasses(category.id)">{{ getCategoryLabel(category.id) }}</span>
                   </button>
                 </div>
               </ng-template>
@@ -134,33 +138,49 @@ type PersistedMemberIdentity = Pick<JoyGroupMember, GroupMemberIdentityFields>;
               <h3 class="text-base font-bold mb-3">{{ 'newGroup.inviteMembers' | translate }}</h3>
               <div class="flex items-center justify-between mb-4">
                 <p class="text-sm font-semibold text-slate-700 dark:text-slate-300">{{ 'newGroup.addMembers' | translate }}</p>
-                <span class="text-xs text-slate-500 dark:text-slate-400">{{ groupForm.members.length }}/10 {{ 'newGroup.added' | translate }}</span>
+                <span class="text-xs text-slate-500 dark:text-slate-400">{{ groupForm.members.length }} {{ 'newGroup.added' | translate }}</span>
               </div>
 
               <div *ngIf="areFriendsLoading" class="mb-3 text-xs text-slate-500 dark:text-slate-400">
                 {{ 'newGroup.loadingFriends' | translate }}
               </div>
 
-              <!-- Chips mode when total friends < 10 -->
-              <div *ngIf="showMemberChips" class="mb-4 flex flex-wrap gap-2">
+              <div *ngIf="currentUserMember || apiSuggestedMembers.length > 0" class="mb-4 flex max-h-56 flex-wrap gap-2 overflow-y-auto pr-1">
                 <button
-                  *ngFor="let member of availableMembers"
+                  *ngIf="currentUserMember"
+                  type="button"
+                  (click)="toggleMember(currentUserMember)"
+                  [class]="getMemberChipClasses(currentUserMember)"
+                >
+                  <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[10px] font-bold" [ngClass]="getAvatarColorClasses(currentUserMember.name)">{{ currentUserMember.initials }}</span>
+                  <span class="flex min-w-0 flex-col text-left leading-tight">
+                    <span class="truncate text-xs font-semibold">{{ currentUserMember.name }}{{ getCurrentUserLabel(currentUserMember.id) }}</span>
+                    <!-- <span *ngIf="currentUserMember.email" class="truncate text-[11px] opacity-70">{{ currentUserMember.email }}</span> -->
+                  </span>
+                  <span *ngIf="isMemberSelected(currentUserMember.id)" class="material-symbols-outlined text-sm">check</span>
+                </button>
+
+                <button
+                  *ngFor="let member of apiSuggestedMembers"
                   type="button"
                   (click)="toggleMember(member)"
                   [class]="getMemberChipClasses(member)"
                 >
-                  <span class="text-[10px] font-bold leading-none">{{ member.initials }}</span>
-                  <span class="text-xs font-semibold">{{ member.name }}</span>
+                  <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[10px] font-bold" [ngClass]="getAvatarColorClasses(member.name)">{{ member.initials }}</span>
+                  <span class="flex min-w-0 flex-col text-left leading-tight">
+                    <span class="truncate text-xs font-semibold">{{ member.name }}</span>
+                    <span *ngIf="member.email" class="truncate text-[11px] opacity-70">{{ member.email }}</span>
+                  </span>
                   <span *ngIf="isMemberSelected(member.id)" class="material-symbols-outlined text-sm">check</span>
                 </button>
               </div>
 
-              <!-- Search mode when total friends >= 10 -->
-              <div *ngIf="!showMemberChips" class="relative">
+              <div class="relative">
                 <span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-xl">alternate_email</span>
                 <input 
                   [(ngModel)]="memberSearchQuery"
                   (input)="onMemberSearch()"
+                  (keydown.enter)="onMemberSearchEnter($event)"
                   class="w-full pl-12 pr-4 py-3 bg-slate-50 dark:bg-slate-800 border-transparent focus:border-primary focus:ring-2 focus:ring-primary/20 rounded-xl transition-all outline-none placeholder:text-slate-400 dark:placeholder:text-slate-500" 
                   [placeholder]="'newGroup.searchByNameOrEmail' | translate" 
                   type="text"
@@ -168,7 +188,7 @@ type PersistedMemberIdentity = Pick<JoyGroupMember, GroupMemberIdentityFields>;
               </div>
 
               <!-- Search Results -->
-              <div *ngIf="!showMemberChips && memberSearchQuery && filteredMembers.length > 0" class="space-y-2 max-h-32 overflow-y-auto mt-4">
+              <div *ngIf="memberSearchQuery && filteredMembers.length > 0" class="space-y-2 max-h-32 overflow-y-auto mt-4">
                 <button 
                   *ngFor="let member of filteredMembers"
                   (click)="addMember(member)"
@@ -179,9 +199,22 @@ type PersistedMemberIdentity = Pick<JoyGroupMember, GroupMemberIdentityFields>;
                     {{ member.initials }}
                   </div>
                   <div>
-                    <p class="text-sm font-medium">{{ member.name }}</p>
+                    <p class="text-sm font-medium">{{ member.name }}{{ getCurrentUserLabel(member.id) }}</p>
                     <p class="text-xs text-slate-500">{{ member.email }}</p>
                   </div>
+                </button>
+              </div>
+
+              <div *ngIf="memberSearchQuery && filteredMembers.length === 0" class="mt-3 space-y-2 rounded-xl border border-dashed border-slate-200 bg-slate-50/80 px-4 py-3 text-sm dark:border-slate-700 dark:bg-slate-800/60">
+                <p class="font-medium text-slate-600 dark:text-slate-300">{{ 'newGroup.noFriendMatches' | translate }}</p>
+                <button
+                  *ngIf="canAddManualMember()"
+                  type="button"
+                  (click)="addManualMemberFromQuery()"
+                  class="inline-flex items-center gap-2 rounded-full bg-primary/10 px-3 py-1.5 text-xs font-semibold text-primary transition-colors hover:bg-primary/15"
+                >
+                  <span class="material-symbols-outlined text-sm">add</span>
+                  {{ t('newGroup.pressEnterToAdd', { value: memberSearchQuery.trim() }) }}
                 </button>
               </div>
 
@@ -196,7 +229,6 @@ type PersistedMemberIdentity = Pick<JoyGroupMember, GroupMemberIdentityFields>;
                   </div>
                   <span class="text-sm font-medium">{{ member.name }}{{ getCurrentUserLabel(member.id) }}</span>
                   <button 
-                    *ngIf="member.id !== 'current-user'"
                     (click)="removeMember(member.id)"
                     class="ml-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
                     type="button"
@@ -250,11 +282,14 @@ export class NewGroupDialogComponent implements OnInit, OnDestroy {
 
   filteredMembers: GroupMember[] = [];
   private unsubscribeFriends: Unsubscribe | null = null;
-  private unsubscribeDirectoryUsers: Unsubscribe | null = null;
-  private directoryMembers: GroupMember[] = [];
+  private readonly userSubscription: Subscription;
+  public currentUserMember: GroupMember = this.createFallbackCurrentUserMember();
+  private lastSessionKey = '__uninitialized__';
 
-  get showMemberChips(): boolean {
-    return this.availableMembers.length > 0 && this.availableMembers.length < 10;
+  get apiSuggestedMembers(): GroupMember[] {
+    return this.availableMembers
+      .filter((member) => member.id !== this.currentUserMember.id) 
+      .sort((leftMember, rightMember) => leftMember.name.localeCompare(rightMember.name));
   }
 
   constructor(
@@ -263,14 +298,30 @@ export class NewGroupDialogComponent implements OnInit, OnDestroy {
     private readonly friendService: FriendService,
     private readonly activityService: ActivityService,
     private readonly translationService: TranslationService,
+    private readonly userSessionService: UserSessionService,
+    private readonly avatarColorService: AvatarColorService,
     private readonly ngZone: NgZone,
     private readonly cdr: ChangeDetectorRef
-  ) {}
+  ) {
+    this.userSubscription = this.userSessionService.user$.subscribe((user) => {
+      const nextSessionKey = user?.uid ?? 'guest';
+      this.currentUserMember = this.createCurrentUserMember(user);
+
+      const existingCurrentUserIndex = this.groupForm.members.findIndex((member) => member.id === 'current-user');
+      if (existingCurrentUserIndex >= 0) {
+        this.groupForm.members[existingCurrentUserIndex] = this.currentUserMember;
+      }
+
+      if (this.lastSessionKey !== nextSessionKey) {
+        this.lastSessionKey = nextSessionKey;
+        this.listenToFriendSuggestions();
+      }
+    });
+  }
 
   ngOnInit() {
     this.checkViewport();
     this.initializeForm();
-    this.listenToFriendSuggestions();
   }
 
   @HostListener('window:resize')
@@ -281,8 +332,7 @@ export class NewGroupDialogComponent implements OnInit, OnDestroy {
   ngOnDestroy(): void {
     this.unsubscribeFriends?.();
     this.unsubscribeFriends = null;
-    this.unsubscribeDirectoryUsers?.();
-    this.unsubscribeDirectoryUsers = null;
+    this.userSubscription.unsubscribe();
   }
 
   initializeForm() {
@@ -332,7 +382,7 @@ export class NewGroupDialogComponent implements OnInit, OnDestroy {
       category,
       customCategoryName,
       photo: group?.photo ?? '',
-      members: (group?.members ?? []).map((member) => this.toEditableMember(member))
+      members: group ? (group.members ?? []).map((member) => this.toEditableMember(member)) : []
     };
     this.memberSearchQuery = '';
     this.filteredMembers = [];
@@ -423,20 +473,35 @@ export class NewGroupDialogComponent implements OnInit, OnDestroy {
   }
 
   onMemberSearch() {
-    if (!this.memberSearchQuery.trim()) {
+    const query = this.memberSearchQuery.trim().toLowerCase();
+    if (!query) {
       this.filteredMembers = [];
       return;
     }
 
-    const query = this.memberSearchQuery.toLowerCase();
     this.filteredMembers = this.availableMembers.filter(member => 
-      !this.groupForm.members.some(groupMember => groupMember.id === member.id) &&
+      !this.groupForm.members.some(groupMember => this.isSameMember(groupMember, member)) &&
       (member.name.toLowerCase().includes(query) || member.email.toLowerCase().includes(query))
     );
   }
 
+  onMemberSearchEnter(event: Event): void {
+    event.preventDefault();
+
+    if (this.filteredMembers.length > 0) {
+      this.addMember(this.filteredMembers[0]);
+      return;
+    }
+
+    if (this.canAddManualMember()) {
+      this.addManualMemberFromQuery();
+    }
+  }
+
   addMember(member: GroupMember) {
-    if (this.groupForm.members.length >= 10) {
+    if (this.groupForm.members.some((groupMember) => this.isSameMember(groupMember, member))) {
+      this.memberSearchQuery = '';
+      this.filteredMembers = [];
       return;
     }
 
@@ -445,29 +510,84 @@ export class NewGroupDialogComponent implements OnInit, OnDestroy {
     this.filteredMembers = [];
   }
 
+  canAddManualMember(): boolean {
+    const query = this.memberSearchQuery.trim();
+    if (!query) {
+      return false;
+    }
+
+    const normalizedQuery = query.toLowerCase();
+
+    const existsInSelected = this.groupForm.members.some((member) =>
+      member.name.toLowerCase() === normalizedQuery || member.email.toLowerCase() === normalizedQuery
+    );
+
+    if (existsInSelected) {
+      return false;
+    }
+
+    return !this.availableMembers.some((member) =>
+      member.name.toLowerCase() === normalizedQuery || member.email.toLowerCase() === normalizedQuery
+    );
+  }
+
+  addManualMemberFromQuery(): void {
+    const query = this.memberSearchQuery.trim();
+    if (!query) {
+      return;
+    }
+
+    const looksLikeEmail = query.includes('@');
+    const name = looksLikeEmail ? this.getDisplayNameFromEmail(query) : query;
+
+    this.addMember({
+      id: `manual-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      name,
+      email: looksLikeEmail ? query : '',
+      initials: this.getInitials(name)
+    });
+  }
+
   removeMember(memberId: string) {
-    this.groupForm.members = this.groupForm.members.filter(member => member.id !== memberId);
+    const targetMember = this.groupForm.members.find((member) => member.id === memberId);
+    if (!targetMember) {
+      return;
+    }
+
+    this.groupForm.members = this.groupForm.members.filter(member => !this.isSameMember(member, targetMember));
   }
 
   toggleMember(member: GroupMember): void {
-    if (this.isMemberSelected(member.id)) {
-      this.removeMember(member.id);
+    const existingMember = this.groupForm.members.find((groupMember) => this.isSameMember(groupMember, member));
+    if (existingMember) {
+      this.removeMember(existingMember.id);
       return;
     }
     this.addMember(member);
   }
 
   isMemberSelected(memberId: string): boolean {
-    return this.groupForm.members.some(member => member.id === memberId);
+    const targetMember = this.availableMembers.find((member) => member.id === memberId)
+      ?? (memberId === this.currentUserMember.id ? this.currentUserMember : this.groupForm.members.find((member) => member.id === memberId));
+
+    if (!targetMember) {
+      return false;
+    }
+
+    return this.groupForm.members.some(member => this.isSameMember(member, targetMember));
   }
 
   getMemberChipClasses(member: GroupMember): string {
     const selected = this.isMemberSelected(member.id);
-    const base = 'inline-flex items-center gap-2 rounded-full border px-3 py-1.5 transition-all';
+    const base = 'inline-flex min-w-[180px] max-w-full items-center gap-2 rounded-full border px-2 py-1.5 transition-all';
     if (selected) {
       return `${base} border-primary bg-primary/10 text-primary`;
     }
     return `${base} border-slate-200 bg-white text-slate-600 hover:border-primary/30 hover:bg-primary/5 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300`;
+  }
+
+  getAvatarColorClasses(seed: string): string {
+    return this.avatarColorService.getInitialAvatarClasses(seed);
   }
 
   isFormValid(): boolean {
@@ -564,13 +684,12 @@ export class NewGroupDialogComponent implements OnInit, OnDestroy {
   private listenToFriendSuggestions(): void {
     this.areFriendsLoading = true;
     this.unsubscribeFriends?.();
-    this.unsubscribeDirectoryUsers?.();
 
     this.unsubscribeFriends = this.friendService.listenToFriends(
       (friends) => {
         this.ngZone.run(() => {
           const friendMembers = friends.map((friend) => this.toGroupMember(friend));
-          this.availableMembers = this.mergeMembers(friendMembers, this.directoryMembers);
+          this.availableMembers = friendMembers;
           this.areFriendsLoading = false;
           if (this.memberSearchQuery.trim()) {
             this.onMemberSearch();
@@ -588,54 +707,6 @@ export class NewGroupDialogComponent implements OnInit, OnDestroy {
         });
       }
     );
-
-    this.unsubscribeDirectoryUsers = this.friendService.listenToDirectoryUsers(
-      (users) => {
-        this.ngZone.run(() => {
-          this.directoryMembers = users
-            .filter((user) => !!user.email)
-            .map((user) => ({
-              id: user.uid,
-              name: user.displayName || user.email,
-              email: user.email,
-              phone: user.phone || undefined,
-              avatar: user.avatar || undefined,
-              initials: this.getInitials(user.displayName || user.email)
-            }));
-
-          const friendMembers = this.availableMembers.filter((member) => member.id !== 'current-user');
-          this.availableMembers = this.mergeMembers(friendMembers, this.directoryMembers);
-          if (this.memberSearchQuery.trim()) {
-            this.onMemberSearch();
-          }
-          this.cdr.detectChanges();
-        });
-      },
-      (error) => {
-        this.ngZone.run(() => {
-          console.error('Unable to load user directory for autocomplete.', error);
-          this.cdr.detectChanges();
-        });
-      }
-    );
-  }
-
-  private mergeMembers(primary: GroupMember[], secondary: GroupMember[]): GroupMember[] {
-    const merged = new Map<string, GroupMember>();
-    const pushMember = (member: GroupMember) => {
-      const key = member.email.trim().toLowerCase() || member.id;
-      if (!key) {
-        return;
-      }
-
-      if (!merged.has(key)) {
-        merged.set(key, member);
-      }
-    };
-
-    primary.forEach(pushMember);
-    secondary.forEach(pushMember);
-    return Array.from(merged.values());
   }
 
   private toGroupMember(friend: Friend): GroupMember {
@@ -671,6 +742,10 @@ export class NewGroupDialogComponent implements OnInit, OnDestroy {
       sanitizedMember.phone = member.phone;
     }
 
+    if ('isPaid' in member && typeof member.isPaid === 'boolean') {
+      sanitizedMember.isPaid = member.isPaid;
+    }
+
     return sanitizedMember;
   }
 
@@ -687,6 +762,35 @@ export class NewGroupDialogComponent implements OnInit, OnDestroy {
     }
 
     return { category: 'other', customCategoryName: categoryName };
+  }
+
+  getCategoryLabel(categoryId: string): string {
+    return this.translationService.tCategory(categoryId);
+  }
+
+  private getDisplayNameFromEmail(email: string): string {
+    const localPart = email.split('@')[0] ?? email;
+    return localPart
+      .split(/[._-]+/)
+      .filter(Boolean)
+      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(' ') || email;
+  }
+
+  private createCurrentUserMember(user: { uid?: string | null; displayName?: string | null; email?: string | null; photoURL?: string | null } | null): GroupMember {
+    const name = user?.displayName?.trim() || user?.email?.trim() || 'Guest';
+
+    return {
+      id: 'current-user',
+      name,
+      email: user?.email?.trim() || '',
+      avatar: user?.photoURL?.trim() || undefined,
+      initials: this.getInitials(name)
+    };
+  }
+
+  private createFallbackCurrentUserMember(): GroupMember {
+    return this.createCurrentUserMember(null);
   }
 
   private getInitials(name: string): string {
@@ -711,12 +815,23 @@ export class NewGroupDialogComponent implements OnInit, OnDestroy {
     return this.groupForm.customCategoryName.trim() || 'Others';
   }
 
-  t(key: string): string {
-    return this.translationService.t(key);
+  t(key: string, params?: Record<string, string>): string {
+    return this.translationService.t(key, params);
   }
 
   private checkViewport(): void {
     const win = (globalThis as any).window;
     this.isMobileViewport = !!win && win.innerWidth < 1024;
+  }
+
+  private isSameMember(leftMember: GroupMember, rightMember: GroupMember): boolean {
+    const leftEmail = leftMember.email?.trim().toLowerCase();
+    const rightEmail = rightMember.email?.trim().toLowerCase();
+
+    if (leftEmail && rightEmail) {
+      return leftEmail === rightEmail;
+    }
+
+    return leftMember.id === rightMember.id;
   }
 }

@@ -1,3 +1,10 @@
+export interface JoyCreator {
+  uid: string;
+  name: string;
+  email: string;
+  avatar?: string;
+}
+
 export interface Joy {
   id: string;
   joyName: string;
@@ -9,6 +16,7 @@ export interface Joy {
   icon: string;
   iconBg: string;
   iconColor: string;
+  createdBy?: JoyCreator;
 }
 
 export type JoyCategory =
@@ -35,6 +43,7 @@ export interface JoyGroupMember {
   shareAmount?: number;
   percentage?: number;
   customAmount?: number;
+  isPaid?: boolean;
 }
 
 export interface JoyGroup {
@@ -53,6 +62,9 @@ export interface JoyExpense {
   id: string;
   title: string;
   amount: number;
+  currency?: string;
+  originalAmount?: number;
+  conversionRate?: number;
   date: string;
   paidBy: string;
   splitType: 'equally' | 'percentage' | 'custom';

@@ -1,20 +1,24 @@
 import { ChangeDetectorRef, Component, EventEmitter, Input, NgZone, OnChanges, OnDestroy, Output, SimpleChanges, TemplateRef, ViewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { type Unsubscribe } from 'firebase/database';
+import { Subscription } from 'rxjs';
 import { AddExpenseDialogComponent } from '../add-expense-dialog/add-expense-dialog.component';
 import { NewGroupDialogComponent } from '../new-group-dialog/new-group-dialog.component';
 import { CommonDialogAction, CommonDialogService } from '../../services/common-dialog.service';
-import { CurrencyService } from '../../services/currency.service';
+import { AppCurrency, CurrencyService } from '../../services/currency.service';
 import { AvatarColorService } from '../../services/avatar-color.service';
 import { TranslatePipe } from '../../pipes/translate.pipe';
 import { JoyExpense, JoyGroup } from '../../types/joy.interface';
 import { JoyService } from '../../services/joy.service';
 import { TranslationService } from '../../services/translation.service';
+import { UserSessionService } from '../../services/user-session.service';
 
 interface GroupExpense {
   id: string;
   description: string;
   amount: number;
+  originalAmount?: number;
+  currency?: string;
   paidBy: string;
   date: string;
   source: JoyExpense;
@@ -30,34 +34,57 @@ const MOBILE_SWIPE_ACTION_WIDTH = 88;
     <div class="p-4 md:p-8 max-w-6xl mx-auto">
       <ng-container *ngIf="groupDetail as group">
         <header class="md:hidden pb-4">
-          <div class="flex items-center justify-between mb-2">
-            <button
-              type="button"
-              (click)="onBack()"
-              class="p-2 -ml-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-              [attr.aria-label]="'groupDetail.backToGroups' | translate"
-              [title]="'groupDetail.backToGroups' | translate"
-            >
-              <span class="material-symbols-outlined text-slate-600 dark:text-slate-400">arrow_back</span>
-            </button>
+          <div class="relative min-h-[224px] overflow-hidden rounded-[28px] shadow-sm">
+            <img
+              [src]="hasImage(group.photo) ? group.photo : 'https://images.unsplash.com/photo-1525625293386-3f8f99389edd?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80'"
+              [alt]="group.name"
+              class="absolute inset-0 h-full w-full object-cover"
+            />
+            <div class="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-slate-900/35 to-slate-900/10"></div>
 
-            <div class="flex items-center gap-1">
-              <button
-                type="button"
-                (click)="openGroupDetails(group)" 
-                class="inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 transition-colors hover:border-primary/30 hover:text-primary dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-primary/30 dark:hover:text-primary"
-                [attr.aria-label]="'groupDetail.editGroup' | translate"
-                [title]="'groupDetail.editGroup' | translate"
-              >
-                <span class="material-symbols-outlined text-[18px]">settings</span>
-              </button>
+            <div class="relative z-10 flex min-h-[224px] flex-col justify-between p-4">
+              <div class="flex items-center justify-between gap-3">
+                <button
+                  type="button"
+                  (click)="onBack()"
+                  class="inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/30 bg-white/15 text-white backdrop-blur-md transition-colors hover:bg-white/25"
+                  [attr.aria-label]="'groupDetail.backToGroups' | translate"
+                  [title]="'groupDetail.backToGroups' | translate"
+                >
+                  <span class="material-symbols-outlined text-[20px]">arrow_back</span>
+                </button>
+
+                <button
+                  type="button"
+                  (click)="openGroupDetails(group)"
+                  class="inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/30 bg-white/15 text-white backdrop-blur-md transition-colors hover:bg-white/25"
+                  [attr.aria-label]="'groupDetail.editGroup' | translate"
+                  [title]="'groupDetail.editGroup' | translate"
+                >
+                  <span class="material-symbols-outlined text-[18px]">settings</span>
+                </button>
+              </div>
+
+              <div class="space-y-3 pr-2">
+                <div>
+                  <h1 class="break-words text-3xl font-black tracking-tight text-white">{{ group.name }}</h1>
+                  <p class="mt-2 flex flex-wrap items-center gap-1.5 text-sm font-medium text-white/90">
+                    <span class="material-symbols-outlined text-sm">calendar_today</span>
+                    {{ formatDate(group.createdAt) }} • {{ getCategoryLabel(group.category) }}
+                  </p>
+                </div>
+
+                <!-- <button
+                  type="button"
+                  (click)="openAddExpenseDialog()"
+                  class="inline-flex h-11 items-center justify-center gap-2 self-start rounded-xl border border-white/25 bg-white/15 px-4 text-sm font-bold text-white backdrop-blur-md transition-colors hover:bg-white/25"
+                >
+                  <span class="material-symbols-outlined text-[18px]">add_circle</span>
+                  <span>{{ 'groupDetail.addExpense' | translate }}</span>
+                </button> -->
+              </div>
             </div>
           </div>
-          <h1 class="text-3xl font-bold tracking-tight text-slate-900 dark:text-white">{{ group.name }}</h1>
-          <p class="text-slate-500 dark:text-slate-400 text-sm mt-1 font-medium flex items-center gap-1">
-            <span class="material-symbols-outlined text-sm">calendar_today</span>
-            {{ formatDate(group.createdAt) }} • {{ group.category || ('groupDetail.general' | translate) }}
-          </p>
         </header>
       </ng-container>
 
@@ -80,24 +107,24 @@ const MOBILE_SWIPE_ACTION_WIDTH = 88;
             [alt]="group.name"
             class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
           />
+          <button
+            type="button"
+            (click)="onBack()"
+            class="absolute left-6 top-6 z-20 bg-white/20 backdrop-blur-md hover:bg-white/30 text-white border border-white/30 px-5 py-2 rounded-xl text-sm font-bold transition-all flex items-center gap-2"
+          >
+            <span class="material-symbols-outlined text-sm">arrow_back</span>
+            {{ 'groupDetail.backToGroups' | translate }}
+          </button>
           <div class="absolute bottom-0 left-0 p-8 z-20 w-full flex justify-between items-end">
             <div>
               <h2 class="text-white text-4xl font-black tracking-tight mb-2">{{ group.name }}</h2>
               <div class="flex items-center gap-2 text-white/90">
                 <span class="material-symbols-outlined text-sm">calendar_today</span>
-                <span class="text-sm font-medium">{{ formatDate(group.createdAt) }} • {{ group.category || ('groupDetail.general' | translate) }}</span>
+                <span class="text-sm font-medium">{{ formatDate(group.createdAt) }} • {{ getCategoryLabel(group.category) }}</span>
               </div>
             </div>
 
             <div class="flex items-center gap-2">
-              <button
-                type="button"
-                (click)="onBack()"
-                class="bg-white/20 backdrop-blur-md hover:bg-white/30 text-white border border-white/30 px-5 py-2 rounded-xl text-sm font-bold transition-all flex items-center gap-2"
-              >
-                <span class="material-symbols-outlined text-sm">arrow_back</span>
-                {{ 'groupDetail.backToGroups' | translate }}
-              </button>
               <button
                 type="button"
                 (click)="openGroupDetails(group)"
@@ -146,7 +173,8 @@ const MOBILE_SWIPE_ACTION_WIDTH = 88;
                   </div>
                   <div class="ml-4 flex items-center gap-4">
                     <div class="text-right">
-                      <p class="text-md font-bold">{{ formatAmount(expense.amount) }}</p>
+                      <p class="text-md font-bold">{{ getExpensePrimaryAmount(expense) }}</p>
+                      <p *ngIf="shouldShowExpenseOriginalAmount(expense)" class="text-[11px] text-slate-500 dark:text-slate-400">{{ getExpenseOriginalAmount(expense) }}</p>
                     </div>
                     <button
                       type="button"
@@ -197,7 +225,8 @@ const MOBILE_SWIPE_ACTION_WIDTH = 88;
                       </div>
                     </div>
                     <div class="ml-3 shrink-0 text-right">
-                      <p class="text-md font-bold">{{ formatAmount(expense.amount) }}</p>
+                      <p class="text-md font-bold">{{ getExpensePrimaryAmount(expense) }}</p>
+                      <p *ngIf="shouldShowExpenseOriginalAmount(expense)" class="text-[11px] text-slate-500 dark:text-slate-400">{{ getExpenseOriginalAmount(expense) }}</p>
                     </div>
                   </div>
                 </div>
@@ -249,7 +278,7 @@ const MOBILE_SWIPE_ACTION_WIDTH = 88;
 
               <div class="md:hidden overflow-hidden rounded-lg border border-slate-200 bg-white px-3 py-2 text-[11px] font-semibold text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
                 <span class="whitespace-nowrap">{{ 'groupDetail.category' | translate }}:</span>
-                <span class="ml-1 font-bold text-slate-900 dark:text-slate-100">{{ group.category || ('groupDetail.general' | translate) }}</span>
+                <span class="ml-1 font-bold text-slate-900 dark:text-slate-100">{{ getCategoryLabel(group.category) }}</span>
                 <span class="mx-1">•</span>
                 <span class="uppercase">{{ 'groupDetail.created' | translate }}</span>
                 <span class="ml-1">{{ formatDate(group.createdAt) }}</span>
@@ -257,7 +286,7 @@ const MOBILE_SWIPE_ACTION_WIDTH = 88;
 
               <div class="hidden md:block">
                 <p class="mb-3 text-xs leading-relaxed text-slate-600 dark:text-slate-300 md:text-sm">
-                  {{ 'groupDetail.category' | translate }}: <span class="font-bold text-slate-900 dark:text-slate-100">{{ group.category || ('groupDetail.general' | translate) }}</span>
+                  {{ 'groupDetail.category' | translate }}: <span class="font-bold text-slate-900 dark:text-slate-100">{{ getCategoryLabel(group.category) }}</span>
                 </p>
                 <div class="flex items-center gap-2 text-slate-500 dark:text-slate-400">
                   <span class="material-symbols-outlined text-[18px]">calendar_today</span>
@@ -281,7 +310,8 @@ const MOBILE_SWIPE_ACTION_WIDTH = 88;
           {{ 'groupDetail.deleteExpensePrompt' | translate:{ expense: pendingDeleteExpense?.description || ('groupDetail.unknown' | translate) } }}
         </p>
         <p class="text-xs text-slate-500 dark:text-slate-400">
-          {{ formatAmount(pendingDeleteExpense?.amount || 0) }}
+          {{ pendingDeleteExpense ? getExpensePrimaryAmount(pendingDeleteExpense) : formatAmount(0) }}
+          <span *ngIf="pendingDeleteExpense && shouldShowExpenseOriginalAmount(pendingDeleteExpense)" class="block">{{ getExpenseOriginalAmount(pendingDeleteExpense) }}</span>
         </p>
       </div>
     </ng-template>
@@ -307,6 +337,10 @@ export class GroupDetailComponent implements OnChanges, OnDestroy {
   private currentSwipeOffset = 0;
   private unsubscribeGroup: Unsubscribe | null = null;
   private unsubscribeExpenses: Unsubscribe | null = null;
+  private readonly userSubscription: Subscription;
+  private lastSessionKey = '__uninitialized__';
+  private loadVersion = 0;
+  private readonly minimumLoadingDuration = 500;
 
   constructor(
     private readonly commonDialogService: CommonDialogService,
@@ -314,9 +348,22 @@ export class GroupDetailComponent implements OnChanges, OnDestroy {
     private readonly avatarColorService: AvatarColorService,
     private readonly joyService: JoyService,
     private readonly translationService: TranslationService,
+    private readonly userSessionService: UserSessionService,
     private readonly ngZone: NgZone,
     private readonly cdr: ChangeDetectorRef
-  ) {}
+  ) {
+    this.userSubscription = this.userSessionService.user$.subscribe((user) => {
+      const nextSessionKey = user?.uid ?? 'guest';
+      if (this.lastSessionKey === nextSessionKey) {
+        return;
+      }
+
+      this.lastSessionKey = nextSessionKey;
+      if (this.joyId && this.groupId) {
+        this.subscribeToGroupDetail();
+      }
+    });
+  }
 
   ngOnChanges(changes: SimpleChanges): void {
     if (changes['joyId'] || changes['groupId']) {
@@ -324,11 +371,20 @@ export class GroupDetailComponent implements OnChanges, OnDestroy {
     }
   }
 
+  getCategoryLabel(category?: string | null): string {
+    if (!category) {
+      return this.translationService.t('groupDetail.general');
+    }
+
+    return this.translationService.tCategory(category);
+  }
+
   ngOnDestroy(): void {
     this.unsubscribeGroup?.();
     this.unsubscribeGroup = null;
     this.unsubscribeExpenses?.();
     this.unsubscribeExpenses = null;
+    this.userSubscription.unsubscribe();
   }
 
   onBack() {
@@ -423,6 +479,31 @@ export class GroupDetailComponent implements OnChanges, OnDestroy {
 
   formatAmount(value: number): string {
     return this.currencyService.formatAmount(value);
+  }
+
+  shouldShowExpenseOriginalAmount(expense: GroupExpense): boolean {
+    const sourceCurrency = this.getExpenseCurrency(expense);
+    return !!sourceCurrency && sourceCurrency !== this.currencyService.currentCurrency();
+  }
+
+  getExpensePrimaryAmount(expense: GroupExpense): string {
+    const sourceCurrency = this.getExpenseCurrency(expense);
+    const originalAmount = this.getExpenseOriginalNumericAmount(expense);
+    if (sourceCurrency && sourceCurrency !== this.currencyService.currentCurrency()) {
+      return this.currencyService.formatAmount(this.currencyService.convertUsingRateHeuristic(originalAmount, sourceCurrency as AppCurrency));
+    }
+
+    return this.formatAmount(expense.amount);
+  }
+
+  getExpenseOriginalAmount(expense: GroupExpense): string {
+    const sourceCurrency = this.getExpenseCurrency(expense);
+    const originalAmount = this.getExpenseOriginalNumericAmount(expense);
+    if (!sourceCurrency) {
+      return this.formatAmount(expense.amount);
+    }
+
+    return this.currencyService.formatAmountInCurrency(originalAmount, sourceCurrency as AppCurrency);
   }
 
   getAvatarColorClasses(seed: string): string {
@@ -541,6 +622,11 @@ export class GroupDetailComponent implements OnChanges, OnDestroy {
   }
 
   private subscribeToGroupDetail(): void {
+    const currentLoadVersion = ++this.loadVersion;
+    const loadStartedAt = Date.now();
+    let groupResolved = false;
+    let expensesResolved = false;
+
     this.unsubscribeGroup?.();
     this.unsubscribeExpenses?.();
 
@@ -556,24 +642,49 @@ export class GroupDetailComponent implements OnChanges, OnDestroy {
     this.groupDetail = null;
     this.groupExpenses = [];
 
+    const tryFinishLoading = () => {
+      if (!groupResolved || !expensesResolved || currentLoadVersion !== this.loadVersion) {
+        return;
+      }
+
+      const remainingDelay = Math.max(0, this.minimumLoadingDuration - (Date.now() - loadStartedAt));
+      setTimeout(() => {
+        if (currentLoadVersion !== this.loadVersion) {
+          return;
+        }
+
+        this.isLoading = false;
+        this.cdr.detectChanges();
+        this.dataLoaded.emit();
+      }, remainingDelay);
+    };
+
     this.unsubscribeGroup = this.joyService.listenToJoyGroup(
       this.joyId,
       this.groupId,
       (group) => {
         this.ngZone.run(() => {
+          if (currentLoadVersion !== this.loadVersion) {
+            return;
+          }
+
           this.groupDetail = group;
-          this.isLoading = false;
-          this.cdr.detectChanges();
-          this.dataLoaded.emit();
+          groupResolved = true;
+          tryFinishLoading();
         });
       },
       (error) => {
         this.ngZone.run(() => {
+          if (currentLoadVersion !== this.loadVersion) {
+            return;
+          }
+
           console.error('Failed to load group detail.', error);
           this.groupDetail = null;
           this.groupExpenses = [];
-          this.isLoading = false;
-          this.cdr.detectChanges();
+          groupResolved = true;
+          expensesResolved = true;
+          tryFinishLoading();
         });
       }
     );
@@ -583,24 +694,46 @@ export class GroupDetailComponent implements OnChanges, OnDestroy {
       this.groupId,
       (expenses) => {
         this.ngZone.run(() => {
+          if (currentLoadVersion !== this.loadVersion) {
+            return;
+          }
+
           this.groupExpenses = expenses.map((expense: JoyExpense) => ({
             id: expense.id,
             description: expense.title,
             amount: expense.amount,
+            originalAmount: expense.originalAmount,
+            currency: expense.currency,
             paidBy: expense.paidBy,
             date: expense.date,
             source: expense
           }));
-          this.cdr.detectChanges();
+          expensesResolved = true;
+          tryFinishLoading();
         });
       },
       (error) => {
         this.ngZone.run(() => {
+          if (currentLoadVersion !== this.loadVersion) {
+            return;
+          }
+
           console.error('Failed to load group expenses.', error);
           this.groupExpenses = [];
-          this.cdr.detectChanges();
+          expensesResolved = true;
+          tryFinishLoading();
         });
       }
     );
+  }
+
+  private getExpenseCurrency(expense: GroupExpense): string | null {
+    return expense.currency?.trim() || expense.source.currency?.trim() || null;
+  }
+
+  private getExpenseOriginalNumericAmount(expense: GroupExpense): number {
+    return typeof expense.originalAmount === 'number'
+      ? expense.originalAmount
+      : (typeof expense.source.originalAmount === 'number' ? expense.source.originalAmount : expense.amount);
   }
 }
