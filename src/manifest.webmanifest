@@ -1,0 +1,25 @@
+{
+  "name": "Joys Splitter",
+  "short_name": "Joys",
+  "description": "Manage and split expenses with your group",
+  "start_url": "/joys-splitter/",
+  "scope": "/joys-splitter/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f6f6f8",
+  "theme_color": "#135bec",
+  "icons": [
+    {
+      "src": "assets/joys-splitter.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "assets/joys-splitter.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

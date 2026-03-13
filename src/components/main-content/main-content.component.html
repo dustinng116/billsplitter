@@ -13,11 +13,7 @@
     </div>
     <main
       class="h-full overflow-y-auto bg-slate-50 dark:bg-background-dark w-full"
-      style="padding-bottom:calc(env(safe-area-inset-bottom,0px) + 6rem);padding-top:0;padding-left:env(safe-area-inset-left,0px);padding-right:env(safe-area-inset-right,0px);"
-      (touchstart)="onMainTouchStart($event)"
-      (touchmove)="onMainTouchMove($event)"
-      (touchend)="onMainTouchEnd()"
-      (touchcancel)="onMainTouchCancel()"
+      style="padding-bottom:calc(env(safe-area-inset-bottom,0px) + 6rem);padding-top:env(safe-area-inset-top,0px);padding-left:env(safe-area-inset-left,0px);padding-right:env(safe-area-inset-right,0px);"
     >
       <div
         *ngIf="showPullRefreshIndicator"

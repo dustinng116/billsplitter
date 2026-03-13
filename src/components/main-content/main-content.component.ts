@@ -1,4 +1,4 @@
-import { Component, EventEmitter, Output, ViewChild } from "@angular/core";
+import { Component, ElementRef, EventEmitter, NgZone, OnInit, Output, ViewChild } from "@angular/core";
 import { AvatarColorService } from "../../services/avatar-color.service";
 import { UserSessionService } from "../../services/user-session.service";
 import { Observable, Subscription } from "rxjs";
@@ -43,7 +43,7 @@ type ViewType =
   ],
   templateUrl: './main-content.component.html',
 })
-export class MainContentComponent {
+export class MainContentComponent implements OnInit {
   @Output() newGroupClicked = new EventEmitter<string>();
   @Output() addFriendClicked = new EventEmitter<void>();
   @Output() pageDataLoaded = new EventEmitter<string>();
@@ -101,7 +101,9 @@ export class MainContentComponent {
     private readonly userSession: UserSessionService,
     private readonly avatarColorService: AvatarColorService,
     private readonly guestSyncService: GuestSyncService,
-    private readonly appRouteService: AppRouteService
+    private readonly appRouteService: AppRouteService,
+    private readonly ngZone: NgZone,
+    private readonly elementRef: ElementRef
   ) {
     this.supportedCurrencies = this.currencyService.supportedCurrencies;
     this.user$ = this.userSession.user$;
@@ -186,69 +188,73 @@ export class MainContentComponent {
     return Math.max(-18, 8 - this.pullDistance * 0.25);
   }
 
-  onMainTouchStart(event: TouchEvent): void {
-    if (this.isPullRefreshing) {
-      return;
-    }
+  ngOnInit(): void {
+    // Register touch listeners outside Angular so we can use { passive: true } for touchstart/touchmove.
+    // This is CRITICAL on iOS Safari: non-passive touchmove listeners on a scroll container
+    // prevent the browser from delivering tap/click events to child elements.
+    this.ngZone.runOutsideAngular(() => {
+      const mainEl = this.elementRef.nativeElement.querySelector('main') as HTMLElement | null;
+      if (!mainEl) return;
 
+      mainEl.addEventListener('touchstart', (e) => this._onTouchStart(e), { passive: true });
+      mainEl.addEventListener('touchmove', (e) => this._onTouchMove(e), { passive: false });
+      mainEl.addEventListener('touchend', () => this._onTouchEnd(), { passive: true });
+      mainEl.addEventListener('touchcancel', () => this._onTouchCancel(), { passive: true });
+    });
+  }
+
+  private _onTouchStart(event: TouchEvent): void {
+    if (this.isPullRefreshing) return;
     if ((globalThis.window?.innerWidth ?? 1200) >= 1024) {
       this.pullStartY = null;
       return;
     }
-
     const target = event.currentTarget as HTMLElement | null;
     if (!target || target.scrollTop > 0) {
       this.pullStartY = null;
       return;
     }
-
     this.pullStartY = event.touches[0]?.clientY ?? null;
   }
 
-  onMainTouchMove(event: TouchEvent): void {
-    if (this.pullStartY === null || this.isPullRefreshing) {
-      return;
-    }
-
+  private _onTouchMove(event: TouchEvent): void {
+    if (this.pullStartY === null || this.isPullRefreshing) return;
     const currentY = event.touches[0]?.clientY ?? this.pullStartY;
     const delta = currentY - this.pullStartY;
     if (delta <= 0) {
-      this.pullDistance = 0;
-      this.isPulling = false;
+      this.ngZone.run(() => {
+        this.pullDistance = 0;
+        this.isPulling = false;
+      });
       return;
     }
-
-    this.isPulling = true;
-    this.pullDistance = Math.min(this.pullMaxDistance, delta * 0.6);
-    if (event.cancelable) {
-      event.preventDefault();
-    }
+    // Only prevent default scroll when genuinely pulling — this blocks page scroll
+    if (event.cancelable) event.preventDefault();
+    this.ngZone.run(() => {
+      this.isPulling = true;
+      this.pullDistance = Math.min(this.pullMaxDistance, delta * 0.6);
+    });
   }
 
-  onMainTouchEnd(): void {
-    if (!this.isPulling || this.isPullRefreshing) {
+  private _onTouchEnd(): void {
+    this.ngZone.run(() => {
+      if (!this.isPulling || this.isPullRefreshing) {
+        this.resetPullState();
+        return;
+      }
+      if (this.pullDistance >= this.pullTriggerDistance) {
+        this.isPullRefreshing = true;
+        this.pullDistance = this.pullTriggerDistance;
+        setTimeout(() => globalThis.window.location.reload(), 120);
+        return;
+      }
       this.resetPullState();
-      return;
-    }
-
-    if (this.pullDistance >= this.pullTriggerDistance) {
-      this.isPullRefreshing = true;
-      this.pullDistance = this.pullTriggerDistance;
-      setTimeout(() => {
-        globalThis.window.location.reload();
-      }, 120);
-      return;
-    }
-
-    this.resetPullState();
+    });
   }
 
-  onMainTouchCancel(): void {
-    if (this.isPullRefreshing) {
-      return;
-    }
-
-    this.resetPullState();
+  private _onTouchCancel(): void {
+    if (this.isPullRefreshing) return;
+    this.ngZone.run(() => this.resetPullState());
   }
 
   private resetPullState(): void {
