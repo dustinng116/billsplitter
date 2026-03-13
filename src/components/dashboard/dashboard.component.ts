@@ -567,7 +567,7 @@ export class DashboardComponent implements OnChanges, OnDestroy {
           return;
         }
 
-        if (this.selectedJoy?.id && this.lastLoadedJoyId !== this.selectedJoy.id) {
+        if (this.selectedJoy?.id) {
           this.lastLoadedJoyId = this.selectedJoy.id;
           this.dataLoaded.emit();
         }

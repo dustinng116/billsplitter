@@ -288,12 +288,22 @@ export class MainContentComponent {
     );
   }
 
+  private setPageLoading(value: boolean): void {
+    this.isPageLoading = value;
+    if (value) {
+      // Safety: always clear loading after 5s to prevent permanently blocking interaction
+      setTimeout(() => {
+        this.isPageLoading = false;
+      }, 5000);
+    }
+  }
+
   onGroupClicked(groupId: any) {
     if (!this.selectedJoyId || !groupId) {
       return;
     }
 
-    this.isPageLoading = true;
+    this.setPageLoading(true);
     this.appRouteService.goToGroupDetail(this.selectedJoyId, String(groupId));
   }
 
@@ -302,7 +312,7 @@ export class MainContentComponent {
   }
 
   onJoyRowClicked(joy: Joy): void {
-    this.isPageLoading = true;
+    this.setPageLoading(true);
     this.appRouteService.goToDashboard(joy.id);
   }
 
