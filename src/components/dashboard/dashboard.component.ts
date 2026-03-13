@@ -88,6 +88,7 @@ export class DashboardComponent implements OnChanges, OnDestroy {
   private draggingGroupId = "";
   private touchStartX = 0;
   private touchStartY = 0;
+  private touchStartTime = 0;
   private isMovementDetected = false;
   private currentSwipeOffset = 0;
 
@@ -365,6 +366,7 @@ export class DashboardComponent implements OnChanges, OnDestroy {
     this.draggingGroupId = groupId;
     this.touchStartX = event.touches[0]?.clientX ?? 0;
     this.touchStartY = event.touches[0]?.clientY ?? 0;
+    this.touchStartTime = Date.now();
     this.isMovementDetected = false;
     this.currentSwipeOffset =
       this.openedSwipeGroupId === groupId ? -MOBILE_SWIPE_ACTION_WIDTH : 0;
@@ -402,7 +404,7 @@ export class DashboardComponent implements OnChanges, OnDestroy {
     );
   }
 
-  onGroupTouchEnd(groupId: string): void {
+  onGroupTouchEnd(groupId: string, event: TouchEvent): void {
     if (this.draggingGroupId !== groupId) {
       return;
     }
@@ -415,6 +417,31 @@ export class DashboardComponent implements OnChanges, OnDestroy {
 
     this.draggingGroupId = "";
     this.currentSwipeOffset = 0;
+
+    // ── iOS Tap Navigation ─────────────────────────────────────────────────
+    // On real iOS, click events on non-interactive divs are suppressed when
+    // any touchmove fired. So we detect a tap here via time + distance and
+    // emit navigation directly, bypassing the click event.
+    if (!this.isMovementDetected) {
+      const elapsed = Date.now() - this.touchStartTime;
+      const changedTouch = event.changedTouches[0];
+      const distX = Math.abs((changedTouch?.clientX ?? this.touchStartX) - this.touchStartX);
+      const distY = Math.abs((changedTouch?.clientY ?? this.touchStartY) - this.touchStartY);
+      const isTap = elapsed < 500 && distX < 10 && distY < 10;
+
+      if (isTap && this.openedSwipeGroupId !== groupId) {
+        // Only suppress the browser's subsequent click event when the tap
+        // target is the card div itself — not a child button/input which
+        // relies on click to function (e.g. Add Expense button).
+        const target = event.target as HTMLElement | null;
+        const isChildButton = target?.closest('button, a, input, label') !== null;
+        if (!isChildButton) {
+          event.preventDefault();
+          this.groupClicked.emit(groupId);
+        }
+        // If it's a child button, let its own click event fire normally.
+      }
+    }
   }
 
   onGroupTouchCancel(): void {
@@ -630,6 +657,8 @@ export class DashboardComponent implements OnChanges, OnDestroy {
   }
 
   onGroupClick(groupId: string): void {
+    // This fires only when touched from desktop (no touch events). On mobile,
+    // navigation is handled directly in onGroupTouchEnd above.
     if (this.isMovementDetected) {
       return;
     }
