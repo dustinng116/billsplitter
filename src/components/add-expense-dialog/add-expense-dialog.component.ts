@@ -3,7 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { type Unsubscribe } from 'firebase/database';
 import { CommonDialogAction, CommonDialogService } from '../../services/common-dialog.service';
-import { CurrencyService } from '../../services/currency.service';
+import { AppCurrency, CurrencyService } from '../../services/currency.service';
 import { AvatarColorService } from '../../services/avatar-color.service';
 import { TranslatePipe } from '../../pipes/translate.pipe';
 import { JoyService } from '../../services/joy.service';
@@ -16,6 +16,7 @@ interface GroupMember {
   name: string;
   avatar?: string;
   email?: string;
+  initials?: string;
   selected: boolean;
   amount: number;
   percentage: number;
@@ -25,6 +26,7 @@ interface GroupMember {
 interface ExpenseForm {
   title: string;
   amount: number;
+  currency: AppCurrency;
   date: string;
   paidBy: string;
   splitType: 'equally' | 'percentage' | 'custom';
@@ -50,21 +52,26 @@ interface ExpenseForm {
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div class="flex flex-col gap-2">
               <label class="text-sm font-semibold text-slate-700 dark:text-slate-300">{{ 'addExpense.amount' | translate }}</label>
-              <div class="relative">
-                <span *ngIf="!usesSuffixSymbol()" class="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-semibold">{{ getCurrencySymbol() }}</span>
+              <div class="flex overflow-hidden rounded-xl border border-transparent bg-slate-50 transition-all focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20 dark:bg-slate-800">
                 <input
                   [disabled]="isDetailsMode"
                   [value]="getAmountInputValue()"
                   (keydown)="onMoneyKeyDown($event)"
                   (paste)="onMoneyPaste($event)"
                   (input)="onAmountInput($event)"
-                  class="w-full bg-slate-50 dark:bg-slate-800 border-transparent focus:border-primary focus:ring-2 focus:ring-primary/20 rounded-xl transition-all outline-none disabled:opacity-70"
-                  [ngClass]="usesSuffixSymbol() ? 'pl-4 pr-10 py-3' : 'pl-8 pr-4 py-3'"
+                  class="min-w-0 flex-1 bg-transparent px-4 py-3 outline-none disabled:opacity-70"
                   [placeholder]="getMoneyPlaceholder()"
                   type="text"
                   inputmode="numeric"
                 />
-                <span *ngIf="usesSuffixSymbol()" class="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 font-semibold">{{ getCurrencySymbol() }}</span>
+                <select
+                  [(ngModel)]="expenseForm.currency"
+                  [disabled]="isDetailsMode"
+                  (ngModelChange)="onExpenseCurrencyChange($event)"
+                  class="shrink-0 border-l border-slate-200 bg-white px-3 py-3 text-sm font-semibold outline-none disabled:opacity-70 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                >
+                  <option *ngFor="let currency of supportedCurrencies" [value]="currency">{{ currency }}</option>
+                </select>
               </div>
             </div>
             <div class="flex flex-col gap-2">
@@ -104,11 +111,12 @@ interface ExpenseForm {
             <label class="text-sm font-semibold text-slate-700 dark:text-slate-300">{{ 'addExpense.paidBy' | translate }}</label>
             <div *ngIf="isMobileViewport; else desktopPaidByPicker" class="relative">
               <span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-xl">person</span>
-              <select [(ngModel)]="expenseForm.paidBy" [disabled]="isDetailsMode || isLoadingMembers || !expenseForm.members.length" class="w-full pl-12 pr-10 py-3 bg-slate-50 dark:bg-slate-800 border-transparent focus:border-primary focus:ring-2 focus:ring-primary/20 rounded-xl appearance-none outline-none disabled:opacity-70">
+              <select [(ngModel)]="expenseForm.paidBy" [disabled]="isDetailsMode || isLoadingMembers || !expenseForm.members.length" class="w-full appearance-none rounded-xl border-transparent bg-slate-50 py-3 pl-12 pr-10 outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:opacity-70 dark:bg-slate-800 dark:text-slate-100">
                 <option *ngFor="let member of expenseForm.members" [value]="member.name">{{ member.name }}</option>
               </select>
               <span class="material-symbols-outlined absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">expand_more</span>
             </div>
+
             <ng-template #desktopPaidByPicker>
               <div class="relative" (click)="onPaidByMenuClick($event)">
                 <button
@@ -117,9 +125,20 @@ interface ExpenseForm {
                   [disabled]="isDetailsMode || isLoadingMembers || !expenseForm.members.length"
                   class="flex w-full items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-3 text-left text-sm text-slate-700 shadow-sm transition-all hover:border-primary/30 hover:shadow-md disabled:opacity-70 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
                 >
-                  <span class="inline-flex items-center gap-2">
-                    <span class="material-symbols-outlined text-lg text-slate-400">person</span>
-                    <span class="truncate">{{ getPaidByDisplayLabel() }}</span>
+                  <span class="inline-flex min-w-0 items-center gap-3">
+                    <ng-container *ngIf="selectedPaidByMember as selectedPayer; else noPaidBySelected">
+                      <div class="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full" [ngClass]="selectedPayer.avatar ? '' : getAvatarColorClasses(selectedPayer.name)">
+                        <img *ngIf="selectedPayer.avatar; else selectedPayerInitial" [src]="selectedPayer.avatar" [alt]="selectedPayer.name" class="h-full w-full object-cover" />
+                        <ng-template #selectedPayerInitial>
+                          <span class="text-[11px] font-bold">{{ getInitial(selectedPayer.name) }}</span>
+                        </ng-template>
+                      </div>
+                      <span class="truncate">{{ selectedPayer.name }}</span>
+                    </ng-container>
+                    <ng-template #noPaidBySelected>
+                      <span class="material-symbols-outlined text-lg text-slate-400">person</span>
+                      <span class="truncate">{{ getPaidByDisplayLabel() }}</span>
+                    </ng-template>
                   </span>
                   <span class="material-symbols-outlined text-slate-400 transition-transform" [class.rotate-180]="isPaidByMenuOpen">expand_more</span>
                 </button>
@@ -134,7 +153,15 @@ interface ExpenseForm {
                     (click)="selectPaidBy(member.name)"
                     class="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm transition-colors hover:bg-primary/10 dark:hover:bg-primary/20"
                   >
-                    <span class="truncate">{{ member.name }}</span>
+                    <span class="inline-flex min-w-0 items-center gap-3">
+                      <div class="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full" [ngClass]="member.avatar ? '' : getAvatarColorClasses(member.name)">
+                        <img *ngIf="member.avatar; else paidByMemberInitial" [src]="member.avatar" [alt]="member.name" class="h-full w-full object-cover" />
+                        <ng-template #paidByMemberInitial>
+                          <span class="text-[11px] font-bold">{{ getInitial(member.name) }}</span>
+                        </ng-template>
+                      </div>
+                      <span class="truncate">{{ member.name }}</span>
+                    </span>
                     <span *ngIf="expenseForm.paidBy === member.name" class="material-symbols-outlined text-base text-primary">check</span>
                   </button>
                 </div>
@@ -176,7 +203,8 @@ interface ExpenseForm {
 
                   <div>
                     <p class="font-semibold text-sm">{{ member.name }}</p>
-                    <p class="text-xs text-slate-500 dark:text-slate-400">{{ formatAmount(member.amount) }}</p>
+                    <p class="text-xs font-semibold text-slate-700 dark:text-slate-200">{{ formatConvertedMemberAmount(member) }}</p>
+                    <p *ngIf="shouldShowOriginalCurrency()" class="text-[11px] text-slate-500 dark:text-slate-400">{{ formatOriginalMemberAmount(member.amount) }}</p>
                   </div>
                 </div>
 
@@ -228,6 +256,7 @@ export class AddExpenseDialogComponent implements OnInit, OnChanges, OnDestroy {
   expenseForm: ExpenseForm = {
     title: '',
     amount: 0,
+    currency: 'VND',
     date: new Date().toISOString().split('T')[0],
     paidBy: '',
     splitType: 'equally',
@@ -240,6 +269,15 @@ export class AddExpenseDialogComponent implements OnInit, OnChanges, OnDestroy {
   isPaidByMenuOpen = false;
   dialogMode: 'create' | 'details' = 'create';
   private unsubscribeGroup: Unsubscribe | null = null;
+  readonly supportedCurrencies: AppCurrency[];
+
+  get selectedPaidByMember(): GroupMember | null {
+    return this.expenseForm.members.find((member) => member.name === this.expenseForm.paidBy) ?? null;
+  }
+
+  get suggestedMembers(): GroupMember[] {
+    return this.expenseForm.members.slice(0, 5);
+  }
 
   get isDetailsMode(): boolean {
     return this.dialogMode === 'details';
@@ -254,7 +292,10 @@ export class AddExpenseDialogComponent implements OnInit, OnChanges, OnDestroy {
     private readonly translationService: TranslationService,
     private readonly ngZone: NgZone,
     private readonly cdr: ChangeDetectorRef
-  ) {}
+  ) {
+    this.supportedCurrencies = this.currencyService.supportedCurrencies;
+    this.expenseForm.currency = this.currencyService.currentCurrency();
+  }
 
   ngOnInit(): void {
     this.checkViewport();
@@ -288,6 +329,7 @@ export class AddExpenseDialogComponent implements OnInit, OnChanges, OnDestroy {
   open(): void {
     this.dialogMode = 'create';
     this.isPaidByMenuOpen = false;
+    this.listenToGroupMembers();
     this.resetForm();
     this.commonDialogService.open({
       title: this.translationService.t('addExpense.dialogTitle'),
@@ -305,7 +347,8 @@ export class AddExpenseDialogComponent implements OnInit, OnChanges, OnDestroy {
     this.isPaidByMenuOpen = false;
     this.expenseForm = {
       title: expense.title,
-      amount: expense.amount,
+      amount: expense.originalAmount ?? expense.amount,
+      currency: (expense.currency as AppCurrency | undefined) ?? this.currencyService.currentCurrency(),
       date: expense.date,
       paidBy: expense.paidBy,
       splitType: expense.splitType,
@@ -341,6 +384,7 @@ export class AddExpenseDialogComponent implements OnInit, OnChanges, OnDestroy {
     this.expenseForm = {
       title: '',
       amount: 0,
+      currency: this.currencyService.currentCurrency(),
       date: new Date().toISOString().split('T')[0],
       paidBy: this.expenseForm.members[0]?.name ?? '',
       splitType: 'equally',
@@ -432,6 +476,24 @@ export class AddExpenseDialogComponent implements OnInit, OnChanges, OnDestroy {
     return this.expenseForm.paidBy || this.translationService.t('addExpense.selectPayer');
   }
 
+  toggleSuggestedMember(member: GroupMember): void {
+    if (this.isDetailsMode) {
+      return;
+    }
+
+    member.selected = !member.selected;
+    this.onMemberSelectionChange();
+  }
+
+  getSuggestedMemberChipClasses(member: GroupMember): string {
+    const base = 'inline-flex items-center gap-2 rounded-full border px-3 py-1.5 transition-all disabled:opacity-60';
+    if (member.selected) {
+      return `${base} border-primary bg-primary/10 text-primary`;
+    }
+
+    return `${base} border-slate-200 bg-white text-slate-600 hover:border-primary/30 hover:bg-primary/5 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300`;
+  }
+
   getDateDisplayLabel(): string {
     if (!this.expenseForm.date) {
       return this.translationService.t('addExpense.selectDate');
@@ -447,8 +509,12 @@ export class AddExpenseDialogComponent implements OnInit, OnChanges, OnDestroy {
 
   onAmountInput(event: Event): void {
     const rawValue = (event.target as HTMLInputElement).value;
-    this.expenseForm.amount = Math.max(0, this.currencyService.parseEditableAmount(rawValue));
+    this.expenseForm.amount = Math.max(0, this.currencyService.parseEditableAmount(rawValue, this.expenseForm.currency));
     this.onAmountChange();
+  }
+
+  onExpenseCurrencyChange(currency: AppCurrency): void {
+    this.expenseForm.currency = currency;
   }
 
   onMoneyKeyDown(event: KeyboardEvent): void {
@@ -483,7 +549,7 @@ export class AddExpenseDialogComponent implements OnInit, OnChanges, OnDestroy {
 
   onMoneyPaste(event: ClipboardEvent): void {
     const pastedText = event.clipboardData?.getData('text') ?? '';
-    const parsedValue = this.currencyService.parseEditableAmount(pastedText);
+    const parsedValue = this.currencyService.parseEditableAmount(pastedText, this.expenseForm.currency);
     if (parsedValue <= 0 && pastedText.trim() !== '0') {
       event.preventDefault();
     }
@@ -544,9 +610,14 @@ export class AddExpenseDialogComponent implements OnInit, OnChanges, OnDestroy {
     if (!this.isFormValid()) return;
 
     this.isSubmitting = true;
+    const convertedAmount = this.currencyService.convertUsingRateHeuristic(this.expenseForm.amount, this.expenseForm.currency);
+    const conversionRate = this.currencyService.getCurrencyRate(this.expenseForm.currency);
     const expensePayload = {
       title: this.expenseForm.title,
-      amount: this.expenseForm.amount,
+      amount: convertedAmount,
+      currency: this.expenseForm.currency,
+      originalAmount: this.expenseForm.amount,
+      conversionRate,
       date: this.expenseForm.date,
       paidBy: this.expenseForm.paidBy,
       splitType: this.expenseForm.splitType,
@@ -557,13 +628,21 @@ export class AddExpenseDialogComponent implements OnInit, OnChanges, OnDestroy {
             id: member.id,
             name: member.name,
             email: member.email ?? '',
-            initials: this.getInitial(member.name)
+            initials: this.getInitial(member.name),
+            shareAmount: this.currencyService.convertUsingRateHeuristic(member.amount, this.expenseForm.currency),
+            percentage: member.percentage,
+            customAmount: this.expenseForm.splitType === 'custom'
+              ? this.currencyService.convertUsingRateHeuristic(member.customAmount, this.expenseForm.currency)
+              : member.customAmount
           } as {
             id: string;
             name: string;
             email: string;
             initials: string;
             avatar?: string;
+            shareAmount: number;
+            percentage: number;
+            customAmount: number;
           };
 
           if (member.avatar) {
@@ -580,12 +659,14 @@ export class AddExpenseDialogComponent implements OnInit, OnChanges, OnDestroy {
       await this.activityService.logActivity({
         type: 'add-expense',
         title: 'Added expense',
-        description: `Added expense "${expensePayload.title}" (${this.formatAmount(expensePayload.amount)})`,
+        description: `Added expense "${expensePayload.title}" (${this.expenseForm.amount} ${this.expenseForm.currency})`,
         joyId: this.joyId,
         groupId: this.groupId,
         metadata: {
           expenseTitle: expensePayload.title,
           amount: expensePayload.amount,
+          originalAmount: this.expenseForm.amount,
+          currency: this.expenseForm.currency,
           splitType: expensePayload.splitType
         }
       });
@@ -630,24 +711,48 @@ export class AddExpenseDialogComponent implements OnInit, OnChanges, OnDestroy {
     return this.currencyService.formatAmount(value);
   }
 
+  formatOriginalAmount(value: number): string {
+    return this.currencyService.formatAmountInCurrency(value, this.expenseForm.currency);
+  }
+
+  formatConvertedAmount(value: number): string {
+    return this.currencyService.formatAmount(this.currencyService.convertUsingRateHeuristic(value, this.expenseForm.currency));
+  }
+
+  formatConvertedMemberAmount(member: GroupMember): string {
+    if (!this.shouldShowOriginalCurrency()) {
+      return this.formatOriginalAmount(member.amount);
+    }
+
+    return this.formatConvertedAmount(member.amount);
+  }
+
+  formatOriginalMemberAmount(value: number): string {
+    return this.formatOriginalAmount(value);
+  }
+
+  shouldShowOriginalCurrency(): boolean {
+    return this.expenseForm.currency !== this.currencyService.currentCurrency();
+  }
+
   getAmountInputValue(): string {
-    return this.currencyService.formatEditableAmount(this.expenseForm.amount);
+    return this.currencyService.formatEditableAmountByCurrency(this.expenseForm.amount, this.expenseForm.currency);
   }
 
   getCustomAmountInputValue(member: GroupMember): string {
-    return this.currencyService.formatEditableAmount(member.customAmount);
+    return this.currencyService.formatEditableAmountByCurrency(member.customAmount, this.expenseForm.currency);
   }
 
   getCurrencySymbol(): string {
-    return this.currencyService.getCurrencySymbol();
+    return this.currencyService.getCurrencySymbol(this.expenseForm.currency);
   }
 
   usesSuffixSymbol(): boolean {
-    return this.currencyService.usesSuffixSymbol();
+    return this.currencyService.usesSuffixSymbol(this.expenseForm.currency);
   }
 
   getMoneyPlaceholder(): string {
-    return this.currencyService.currentCurrency() === 'VND' ? '0' : '0.00';
+    return this.currencyService.getCurrencyPlaceholder(this.expenseForm.currency);
   }
 
   onMemberSplitInput(member: GroupMember, event: Event): void {
@@ -656,7 +761,7 @@ export class AddExpenseDialogComponent implements OnInit, OnChanges, OnDestroy {
       const value = Number(rawValue || 0);
       member.percentage = Math.max(0, value);
     } else if (this.expenseForm.splitType === 'custom') {
-      const value = this.currencyService.parseEditableAmount(rawValue);
+      const value = this.currencyService.parseEditableAmount(rawValue, this.expenseForm.currency);
       member.customAmount = Math.max(0, value);
     }
     this.calculateSplit();
@@ -719,6 +824,7 @@ export class AddExpenseDialogComponent implements OnInit, OnChanges, OnDestroy {
             name: member.name,
             avatar: member.avatar,
             email: member.email,
+            initials: member.initials,
             selected: true,
             amount: 0,
             percentage: 0,
@@ -726,7 +832,9 @@ export class AddExpenseDialogComponent implements OnInit, OnChanges, OnDestroy {
           }));
 
           this.initializeDefaultSplitValues();
-          this.expenseForm.paidBy = this.expenseForm.members[0]?.name ?? '';
+          if (!this.expenseForm.members.some((member) => member.name === this.expenseForm.paidBy)) {
+            this.expenseForm.paidBy = this.expenseForm.members[0]?.name ?? '';
+          }
           this.isPaidByMenuOpen = false;
           this.isLoadingMembers = false;
           this.calculateSplit();

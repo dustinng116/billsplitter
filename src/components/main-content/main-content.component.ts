@@ -1,7 +1,7 @@
 import { Component, EventEmitter, Output, ViewChild } from "@angular/core";
 import { AvatarColorService } from "../../services/avatar-color.service";
 import { UserSessionService } from "../../services/user-session.service";
-import { Observable } from "rxjs";
+import { Observable, Subscription } from "rxjs";
 import { CommonModule } from "@angular/common";
 import { DashboardComponent } from "../dashboard/dashboard.component";
 import { GroupDetailComponent } from "../group-detail/group-detail.component";
@@ -18,6 +18,7 @@ import { ThemeMode, ThemeService } from "../../services/theme.service";
 import { ActivityService } from "../../services/activity.service";
 import { Joy } from "../../types/joy.interface";
 import { GuestSyncService } from "../../services/guest-sync.service";
+import { AppRouteService } from "../../services/app-route.service";
 
 type ViewType =
   | "dashboard"
@@ -55,7 +56,7 @@ type ViewType =
     </div>
     <main
       class="h-full overflow-y-auto bg-slate-50 dark:bg-background-dark w-full"
-      style="padding-bottom:calc(env(safe-area-inset-bottom,0px) + 6rem);padding-top:env(safe-area-inset-top,0px);padding-left:env(safe-area-inset-left,0px);padding-right:env(safe-area-inset-right,0px);"
+      style="padding-bottom:calc(env(safe-area-inset-bottom,0px) + 6rem);padding-top:0;padding-left:env(safe-area-inset-left,0px);padding-right:env(safe-area-inset-right,0px);"
       (touchstart)="onMainTouchStart($event)"
       (touchmove)="onMainTouchMove($event)"
       (touchend)="onMainTouchEnd()"
@@ -221,6 +222,63 @@ type ViewType =
               >
                 VND (đ)
               </button>
+              <button
+                type="button"
+                (click)="setCurrency('SGD')"
+                [class]="getCurrencyButtonClasses('SGD')"
+              >
+                SGD (S$)
+              </button>
+              <button
+                type="button"
+                (click)="setCurrency('RM')"
+                [class]="getCurrencyButtonClasses('RM')"
+              >
+                RM (RM)
+              </button>
+            </div>
+
+            <div
+              class="mt-4 space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800/70"
+            >
+              <div
+                class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400"
+              >
+                {{
+                  "account.currencyRateTitle"
+                    | translate : { currency: currentCurrency() }
+                }}
+              </div>
+
+              <div
+                *ngIf="isSyncingCurrencyRates"
+                class="inline-flex items-center gap-2 text-xs font-medium text-primary"
+              >
+                <span class="material-symbols-outlined animate-spin text-sm"
+                  >progress_activity</span
+                >
+                <span>{{ "account.currencyRateSyncing" | translate }}</span>
+              </div>
+
+              <div
+                *ngFor="let currency of supportedCurrencies"
+                class="grid grid-cols-[80px_1fr] items-center gap-3"
+              >
+                <label
+                  class="text-sm font-semibold text-slate-700 dark:text-slate-300"
+                  >{{ currency }}</label
+                >
+                <input
+                  [value]="getCurrencyRateInputValue(currency)"
+                  (input)="onCurrencyRateInput(currency, $event)"
+                  [disabled]="currency === currentCurrency()"
+                  class="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                  inputmode="decimal"
+                  type="number"
+                  min="0"
+                  step="0.0001"
+                />
+              </div>
             </div>
           </section>
 
@@ -335,6 +393,9 @@ export class MainContentComponent {
   isPullRefreshing = false;
   private readonly pullTriggerDistance = 66;
   private readonly pullMaxDistance = 96;
+  private readonly routeSubscription: Subscription;
+  readonly supportedCurrencies: AppCurrency[];
+  isSyncingCurrencyRates = false;
 
   signInWithGoogleAccount() {
     if ((window as any).firebaseAuthSignInWithGoogle) {
@@ -369,8 +430,10 @@ export class MainContentComponent {
     private readonly activityService: ActivityService,
     private readonly userSession: UserSessionService,
     private readonly avatarColorService: AvatarColorService,
-    private readonly guestSyncService: GuestSyncService
+    private readonly guestSyncService: GuestSyncService,
+    private readonly appRouteService: AppRouteService
   ) {
+    this.supportedCurrencies = this.currencyService.supportedCurrencies;
     this.user$ = this.userSession.user$;
     this.user$.subscribe((user) => {
       if (user) {
@@ -378,6 +441,15 @@ export class MainContentComponent {
       }
 
       this.hasGuestData = !!user && this.guestSyncService.hasGuestData();
+    });
+
+    this.routeSubscription = this.appRouteService.state$.subscribe((state) => {
+      this.currentView = state.view;
+      this.selectedJoyId = state.selectedJoyId;
+      this.selectedGroupId = state.selectedGroupId;
+      if (state.view !== "dashboard" && state.view !== "group-detail") {
+        this.isPageLoading = false;
+      }
     });
   }
   onDashboardDataLoaded() {
@@ -547,19 +619,21 @@ export class MainContentComponent {
   }
 
   onGroupClicked(groupId: any) {
-    this.selectedGroupId = groupId;
-    this.currentView = "group-detail";
+    if (!this.selectedJoyId || !groupId) {
+      return;
+    }
+
+    this.isPageLoading = true;
+    this.appRouteService.goToGroupDetail(this.selectedJoyId, String(groupId));
   }
 
   onBackToDashboard() {
-    this.currentView = "dashboard";
-    this.selectedGroupId = "";
+    this.appRouteService.goToDashboard(this.selectedJoyId);
   }
 
   onJoyRowClicked(joy: Joy): void {
-    this.selectedJoyId = joy.id;
-    this.currentView = "dashboard";
-    this.selectedGroupId = "";
+    this.isPageLoading = true;
+    this.appRouteService.goToDashboard(joy.id);
   }
 
   onDashboardNewGroupClicked(joyId: string): void {
@@ -567,34 +641,32 @@ export class MainContentComponent {
   }
 
   onDashboardBackToJoys(): void {
-    this.currentView = "joys-table";
-    this.selectedGroupId = "";
-    this.selectedJoyId = "";
+    this.appRouteService.goToJoysTable();
   }
 
   onNavigationChanged(route: string) {
     switch (route) {
       case "dashboard":
-        this.currentView = "dashboard";
+        if (this.selectedJoyId) {
+          this.appRouteService.goToDashboard(this.selectedJoyId);
+          break;
+        }
+        this.appRouteService.goToJoysTable();
         break;
       case "joys-table":
-        this.currentView = "joys-table";
+        this.appRouteService.goToJoysTable();
         break;
       case "friends":
-        this.currentView = "friends";
+        this.appRouteService.goToFriends();
         break;
       case "activities":
-        this.currentView = "activities";
+        this.appRouteService.goToActivities();
         break;
       case "account":
-        this.currentView = "account";
+        this.appRouteService.goToAccount();
         break;
       default:
-        this.currentView = "joys-table";
-    }
-    this.selectedGroupId = "";
-    if (this.currentView !== "dashboard") {
-      this.selectedJoyId = "";
+        this.appRouteService.goToJoysTable();
     }
   }
 
@@ -604,12 +676,82 @@ export class MainContentComponent {
 
   setCurrency(currency: AppCurrency): void {
     this.currencyService.setCurrency(currency);
+    void this.syncLiveCurrencyRates(currency);
     void this.activityService.logActivity({
       type: "change-currency",
       title: "Changed currency",
       description: `Set app currency to ${currency}`,
       metadata: { currency },
     });
+  }
+
+  currentCurrency(): AppCurrency {
+    return this.currencyService.currentCurrency();
+  }
+
+  onCurrencyRateInput(currency: AppCurrency, event: Event): void {
+    const rate = Number((event.target as HTMLInputElement).value || 1);
+    this.currencyService.setCurrencyRate(currency, rate);
+  }
+
+  getCurrencyRateInputValue(currency: AppCurrency): number {
+    return this.currencyService.getCurrencyRate(currency);
+  }
+
+  private async syncLiveCurrencyRates(
+    targetCurrency: AppCurrency
+  ): Promise<void> {
+    this.isSyncingCurrencyRates = true;
+
+    try {
+      const base = this.toApiCurrency(targetCurrency).toLowerCase();
+
+      const response = await fetch(
+        `https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/${base}.json`
+      );
+
+      if (!response.ok) {
+        throw new Error(`Currency API request failed ${response.status}`);
+      }
+
+      const payload = await response.json();
+
+      const rates = payload[base];
+
+      if (!rates) {
+        throw new Error("Invalid currency response");
+      }
+
+      for (const currency of this.supportedCurrencies) {
+        if (currency === targetCurrency) {
+          this.currencyService.setCurrencyRate(currency, 1);
+          continue;
+        }
+
+        const code = this.toApiCurrency(currency).toLowerCase();
+        const rate = rates[code];
+
+        if (!Number.isFinite(rate)) {
+          continue;
+        }
+
+        this.currencyService.setCurrencyRate(currency, rate);
+      }
+    } catch (error) {
+      console.error("Currency sync failed", error);
+
+      if (typeof (window as any).joysShowToast === "function") {
+        (window as any).joysShowToast(
+          this.translationService.t("account.currencyRateSyncFailed")
+        );
+      }
+    } finally {
+      this.isSyncingCurrencyRates = false;
+    }
+  }
+
+  private toApiCurrency(currency: AppCurrency): string {
+    return currency === "RM" ? "MYR" : currency;
   }
 
   getLanguageButtonClasses(language: AppLanguage): string {
@@ -651,9 +793,7 @@ export class MainContentComponent {
         title: "Logged out",
         description: "User logged out via Firebase Auth",
       });
-      this.currentView = "joys-table";
-      this.selectedJoyId = "";
-      this.selectedGroupId = "";
+      this.appRouteService.goToJoysTable();
     });
   }
 
@@ -668,5 +808,9 @@ export class MainContentComponent {
 
   triggerAddExpense(): void {
     this.groupDetailComp?.openAddExpenseDialog();
+  }
+
+  ngOnDestroy(): void {
+    this.routeSubscription.unsubscribe();
   }
 }

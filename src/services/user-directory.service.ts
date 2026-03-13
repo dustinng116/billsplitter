@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { User } from 'firebase/auth';
-import { onValue, ref, set, type Unsubscribe } from 'firebase/database';
+import { get, onValue, ref, set, type Unsubscribe } from 'firebase/database';
 import { db } from '../firebase';
 
 export interface DirectoryUser {
@@ -43,5 +43,38 @@ export class UserDirectoryService {
       },
       onError
     );
+  }
+
+  async getAllUsers(): Promise<DirectoryUser[]> {
+    const snapshot = await get(this.directoryRef);
+    if (!snapshot.exists()) {
+      return [];
+    }
+
+    const data = snapshot.val() as Record<string, DirectoryUser>;
+    return Object.values(data);
+  }
+
+  async getUserByEmail(email: string): Promise<DirectoryUser | null> {
+    const normalizedEmail = email.trim().toLowerCase();
+    if (!normalizedEmail) {
+      return null;
+    }
+
+    const users = await this.getAllUsers();
+    return users.find((user) => user.email.trim().toLowerCase() === normalizedEmail) ?? null;
+  }
+
+  async getUserByUid(uid: string): Promise<DirectoryUser | null> {
+    if (!uid.trim()) {
+      return null;
+    }
+
+    const snapshot = await get(ref(db, `userDirectory/${uid}`));
+    if (!snapshot.exists()) {
+      return null;
+    }
+
+    return snapshot.val() as DirectoryUser;
   }
 }

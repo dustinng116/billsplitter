@@ -6,15 +6,15 @@ import { CommonModule } from '@angular/common';
   standalone: true,
   imports: [CommonModule],
   template: `
-    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
-      <p class="text-xs font-medium text-slate-500 dark:text-slate-400 text-center sm:text-left">
-        Showing {{ startItem }} to {{ endItem }} of {{ totalItems }} {{ itemLabel }}
+    <div class="flex w-full items-center gap-3 sm:gap-4">
+      <p class="mr-auto text-xs font-medium text-slate-500 dark:text-slate-400">
+        {{ summaryText }}
       </p>
 
-      <div class="flex w-full sm:w-auto gap-2">
+      <div class="flex gap-2">
         <button
           type="button"
-          class="flex-1 sm:flex-none rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-600 disabled:opacity-50 dark:border-slate-700 dark:text-slate-400"
+          class="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-600 disabled:opacity-50 dark:border-slate-700 dark:text-slate-400"
           [disabled]="page <= 1"
           (click)="goToPrevious()"
         >
@@ -22,7 +22,7 @@ import { CommonModule } from '@angular/common';
         </button>
         <button
           type="button"
-          class="flex-1 sm:flex-none rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800"
+          class="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800"
           [disabled]="page >= totalPages"
           (click)="goToNext()"
         >
@@ -58,6 +58,18 @@ export class CommonPaginationComponent {
     }
 
     return Math.min(this.page * this.pageSize, this.totalItems);
+  }
+
+  get summaryText(): string {
+    if (!this.totalItems) {
+      return `Showing 0 of 0 ${this.itemLabel}`;
+    }
+
+    if (this.startItem === this.endItem) {
+      return `Showing ${this.startItem} of ${this.totalItems} ${this.itemLabel}`;
+    }
+
+    return `Showing ${this.startItem}-${this.endItem} of ${this.totalItems} ${this.itemLabel}`;
   }
 
   goToPrevious() {

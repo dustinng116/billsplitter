@@ -2,6 +2,7 @@ import { ChangeDetectorRef, Component, NgZone, OnDestroy, OnInit, TemplateRef, V
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { type Unsubscribe } from 'firebase/database';
+import { Subscription } from 'rxjs';
 import {
   CommonCellDefDirective,
   CommonColumnDefDirective,
@@ -17,6 +18,7 @@ import { ActivityService } from '../../services/activity.service';
 import { AvatarColorService } from '../../services/avatar-color.service';
 import { TranslatePipe } from '../../pipes/translate.pipe';
 import { TranslationService } from '../../services/translation.service';
+import { UserSessionService } from '../../services/user-session.service';
 import { Friend, FriendForm } from '../../types/friend.interface';
 
 const MOBILE_SWIPE_ACTION_WIDTH = 88;
@@ -69,13 +71,10 @@ const MOBILE_SWIPE_ACTION_WIDTH = 88;
           {{ errorMessage }}
         </div>
 
-        <div *ngIf="isLoading" class="flex items-center gap-2 rounded-xl bg-white px-4 py-3 text-sm font-medium text-slate-500 shadow-sm dark:bg-slate-900 dark:text-slate-300">
-          <span class="material-symbols-outlined animate-spin text-base">progress_activity</span>
-          {{ 'friends.loading' | translate }}
-        </div>
-
         <joys-common-table
           [data]="pagedFriends"
+          [isLoading]="isLoading"
+          [loadingText]="t('friends.loading')"
           [displayedColumns]="displayedColumns"
           [rowClass]="'transition-all hover:bg-slate-50 dark:hover:bg-slate-800/50'"
           [emptyText]="t('friends.empty')"
@@ -336,6 +335,11 @@ export class FriendsPageComponent implements OnInit, OnDestroy {
   errorMessage = '';
   dialogErrorMessage = '';
   private unsubscribeFriends: Unsubscribe | null = null;
+  private userSubscription: Subscription | null = null;
+  private lastSessionKey = '__uninitialized__';
+  private loadingTimeoutId: ReturnType<typeof setTimeout> | null = null;
+  private activeLoadVersion = 0;
+  private readonly minimumLoadingDuration = 500;
 
   friends: Friend[] = [];
 
@@ -355,17 +359,28 @@ export class FriendsPageComponent implements OnInit, OnDestroy {
     private readonly activityService: ActivityService,
     private readonly avatarColorService: AvatarColorService,
     private readonly translationService: TranslationService,
+    private readonly userSessionService: UserSessionService,
     private readonly ngZone: NgZone,
     private readonly cdr: ChangeDetectorRef
   ) {}
 
   ngOnInit(): void {
-    this.loadFriends();
+    this.userSubscription = this.userSessionService.user$.subscribe((user) => {
+      const nextSessionKey = user?.uid ?? 'guest';
+      if (this.lastSessionKey === nextSessionKey) {
+        return;
+      }
+
+      this.lastSessionKey = nextSessionKey;
+      this.loadFriends();
+    });
   }
 
   ngOnDestroy(): void {
+    this.clearLoadingTimeout();
     this.unsubscribeFriends?.();
     this.unsubscribeFriends = null;
+    this.userSubscription?.unsubscribe();
   }
 
   openAddFriendDialog() {
@@ -672,11 +687,14 @@ export class FriendsPageComponent implements OnInit, OnDestroy {
   }
 
   private loadFriends(): void {
+    const loadVersion = ++this.activeLoadVersion;
+    const loadStartedAt = Date.now();
     this.isLoading = true;
     this.errorMessage = '';
+    this.clearLoadingTimeout();
     this.unsubscribeFriends?.();
 
-    const loadingTimeout = setTimeout(() => {
+    this.loadingTimeoutId = setTimeout(() => {
       if (this.isLoading) {
         this.isLoading = false;
         this.errorMessage = 'Connection timed out. Please check your network and Firebase rules, then refresh.';
@@ -687,23 +705,48 @@ export class FriendsPageComponent implements OnInit, OnDestroy {
     this.unsubscribeFriends = this.friendService.listenToFriends(
       (friends) => {
         this.ngZone.run(() => {
-          clearTimeout(loadingTimeout);
-          this.friends = friends;
-          this.ensureValidPage();
-          this.isLoading = false;
-          this.cdr.detectChanges();
+          this.completeLoad(loadVersion, loadStartedAt, () => {
+            this.friends = friends;
+            this.ensureValidPage();
+            this.isLoading = false;
+            this.cdr.detectChanges();
+          });
         });
       },
       (error) => {
         this.ngZone.run(() => {
-          clearTimeout(loadingTimeout);
-          console.error('Unable to load friends.', error);
-          this.errorMessage = 'Unable to load friends right now. Please refresh and try again.';
-          this.isLoading = false;
-          this.cdr.detectChanges();
+          this.completeLoad(loadVersion, loadStartedAt, () => {
+            console.error('Unable to load friends.', error);
+            this.errorMessage = 'Unable to load friends right now. Please refresh and try again.';
+            this.isLoading = false;
+            this.cdr.detectChanges();
+          });
         });
       }
     );
+  }
+
+  private clearLoadingTimeout(): void {
+    if (this.loadingTimeoutId) {
+      clearTimeout(this.loadingTimeoutId);
+      this.loadingTimeoutId = null;
+    }
+  }
+
+  private completeLoad(loadVersion: number, loadStartedAt: number, apply: () => void): void {
+    if (loadVersion !== this.activeLoadVersion) {
+      return;
+    }
+
+    this.clearLoadingTimeout();
+    const remainingDelay = Math.max(0, this.minimumLoadingDuration - (Date.now() - loadStartedAt));
+    setTimeout(() => {
+      if (loadVersion !== this.activeLoadVersion) {
+        return;
+      }
+
+      apply();
+    }, remainingDelay);
   }
 
   private isFriendFormValid(): boolean {

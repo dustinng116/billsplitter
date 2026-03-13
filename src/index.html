@@ -214,6 +214,7 @@
         var skipBtn = document.getElementById("splash-skip-btn");
         var topToast = document.getElementById("top-toast");
         var toastTimer = null;
+        var guestAutoEnterKey = "joys:splash:guest-auto-enter";
 
         function showToast(message) {
           if (!topToast) return;
@@ -257,6 +258,15 @@
             splashActions.style.display = "flex";
             splashActions.style.opacity = 1;
             splashActions.style.pointerEvents = "auto";
+            return;
+          }
+
+          if (mode === "guest-auto-enter") {
+            splashContent.style.opacity = 1;
+            splashSpinner.style.display = "block";
+            splashActions.style.opacity = 0;
+            splashActions.style.pointerEvents = "none";
+            splashActions.style.display = "flex";
           }
         }
 
@@ -275,7 +285,14 @@
           }
 
           if (detail.isAuthenticated) {
+            localStorage.removeItem(guestAutoEnterKey);
             hideSplash();
+            return;
+          }
+
+          if (localStorage.getItem(guestAutoEnterKey) === "1") {
+            setSplashMode("guest-auto-enter");
+            setTimeout(hideSplash, 350);
             return;
           }
 
@@ -314,6 +331,11 @@
 
         authFallbackTimer = setTimeout(function () {
           if (!authResolved) {
+            if (localStorage.getItem(guestAutoEnterKey) === "1") {
+              setSplashMode("guest-auto-enter");
+              setTimeout(hideSplash, 350);
+              return;
+            }
             setSplashMode("guest");
           }
         }, fallbackDelay);
@@ -354,7 +376,13 @@
 
         createSplashLoginButton();
 
-        if (skipBtn) skipBtn.onclick = hideSplash;
+        if (skipBtn) {
+          skipBtn.onclick = function () {
+            localStorage.setItem(guestAutoEnterKey, "1");
+            setSplashMode("guest-auto-enter");
+            setTimeout(hideSplash, 250);
+          };
+        }
       });
     </script>
   </body>
