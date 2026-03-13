@@ -1,6 +1,6 @@
 [build]
 command = "npx ng build"
-publish = "dist/demo/browser"
+publish = "dist/joy-splitter/browser"
 
 [[redirects]]
   from = "/*"
