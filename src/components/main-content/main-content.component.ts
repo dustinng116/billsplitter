@@ -61,7 +61,7 @@ export class MainContentComponent implements OnInit {
   pullDistance = 0;
   isPulling = false;
   isPullRefreshing = false;
-  private readonly pullTriggerDistance = 66;
+  readonly pullTriggerDistance = 80;
   private readonly pullMaxDistance = 96;
   private readonly routeSubscription: Subscription;
   readonly supportedCurrencies: AppCurrency[];
@@ -121,6 +121,9 @@ export class MainContentComponent implements OnInit {
       this.selectedGroupId = state.selectedGroupId;
       if (state.view !== "dashboard" && state.view !== "group-detail") {
         this.isPageLoading = false;
+      }
+      if (state.view === "account") {
+        void this.syncLiveCurrencyRates(this.currencyService.currentCurrency());
       }
     });
   }
@@ -188,6 +191,16 @@ export class MainContentComponent implements OnInit {
     return Math.max(-18, 8 - this.pullDistance * 0.25);
   }
 
+  get mainTransform(): string {
+    if (this.isPullRefreshing) {
+      return `translate3d(0, ${this.pullTriggerDistance}px, 0)`;
+    }
+    if (this.isPulling) {
+      return `translate3d(0, ${this.pullDistance}px, 0)`;
+    }
+    return '';
+  }
+
   ngOnInit(): void {
     // Register touch listeners outside Angular so we can use { passive: true } for touchstart/touchmove.
     // This is CRITICAL on iOS Safari: non-passive touchmove listeners on a scroll container
@@ -197,7 +210,7 @@ export class MainContentComponent implements OnInit {
       if (!mainEl) return;
 
       mainEl.addEventListener('touchstart', (e) => this._onTouchStart(e), { passive: true });
-      mainEl.addEventListener('touchmove', (e) => this._onTouchMove(e), { passive: false });
+      mainEl.addEventListener('touchmove', (e) => this._onTouchMove(e), { passive: true });
       mainEl.addEventListener('touchend', () => this._onTouchEnd(), { passive: true });
       mainEl.addEventListener('touchcancel', () => this._onTouchCancel(), { passive: true });
     });
@@ -228,11 +241,11 @@ export class MainContentComponent implements OnInit {
       });
       return;
     }
-    // Only prevent default scroll when genuinely pulling — this blocks page scroll
-    if (event.cancelable) event.preventDefault();
+    // We do NOT prevent default here so iOS Safari allows taps.
+    // overscroll-behavior-y: none on the container prevents the native bounce
     this.ngZone.run(() => {
       this.isPulling = true;
-      this.pullDistance = Math.min(this.pullMaxDistance, delta * 0.6);
+      this.pullDistance = Math.min(this.pullMaxDistance, delta * 0.5);
     });
   }
 
@@ -245,7 +258,13 @@ export class MainContentComponent implements OnInit {
       if (this.pullDistance >= this.pullTriggerDistance) {
         this.isPullRefreshing = true;
         this.pullDistance = this.pullTriggerDistance;
-        setTimeout(() => globalThis.window.location.reload(), 120);
+        this.isPulling = false; // allows css transition to kick in for smooth release
+        
+        // Wait 800ms for the user to see the refresh animation 
+        // before doing a hard browser reload
+        setTimeout(() => {
+          globalThis.window.location.reload();
+        }, 800);
         return;
       }
       this.resetPullState();
