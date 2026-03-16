@@ -2,7 +2,7 @@ import { Injectable } from '@angular/core';
 import { getAuth } from 'firebase/auth';
 import { get, onValue, push, ref, remove, set, update, type Unsubscribe } from 'firebase/database';
 import { db } from '../firebase';
-import { CategoryStyle, Joy, JoyCategory, JoyCreator, JoyExpense, JoyGroup, JoyStatus, StatusStyle } from '../types/joy.interface';
+import { CategoryStyle, Joy, JoyCategory, JoyChecklistItem, JoyCreator, JoyExpense, JoyGroup, JoyStatus, StatusStyle } from '../types/joy.interface';
 import { DataScopeService } from './data-scope.service';
 import { GuestStorageService } from './guest-storage.service';
 import { UserDirectoryService } from './user-directory.service';
@@ -1028,6 +1028,122 @@ export class JoyService {
 
     const directoryUsers = await this.userDirectoryService.getAllUsers();
     return directoryUsers.filter((user) => emails.has(user.email.trim().toLowerCase()) && user.uid !== ownerUid);
+  }
+  // ── Checklist / To-do ──────────────────────────────────────────────────────
+
+  listenToJoyChecklist(
+    joyId: string,
+    onChanged: (items: JoyChecklistItem[]) => void,
+    onError: (error: unknown) => void
+  ): Unsubscribe {
+    if (this.dataScopeService.isGuest()) {
+      const emitItems = () => {
+        const joys = this.readGuestJoysRecord();
+        const checklistData = joys[joyId]?.checklist as Record<string, Omit<JoyChecklistItem, 'id'>> | undefined;
+        if (!checklistData) { onChanged([]); return; }
+        const items = Object.entries(checklistData)
+          .map(([id, value]) => ({ id, ...value } as JoyChecklistItem))
+          .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+        onChanged(items);
+      };
+      void this.guestStorageService.fakeApiDelay().then(emitItems).catch(onError);
+      const unsubGuest = this.guestStorageService.subscribeKey(this.guestJoysKey, emitItems);
+      return () => unsubGuest();
+    }
+
+    let unsubscribeOwner: Unsubscribe | null = null;
+    let unsubscribeActive: Unsubscribe | null = null;
+    let disposed = false;
+
+    unsubscribeOwner = this.listenToJoyOwnerUid(
+      joyId,
+      (ownerUid) => {
+        if (disposed) return;
+        unsubscribeActive?.();
+        unsubscribeActive = null;
+        if (!ownerUid) { onChanged([]); return; }
+        unsubscribeActive = onValue(
+          ref(db, `users/${ownerUid}/joys/${joyId}/checklist`),
+          (snapshot) => {
+            if (!snapshot.exists()) { onChanged([]); return; }
+            const data = snapshot.val() as Record<string, Omit<JoyChecklistItem, 'id'>>;
+            const items = Object.entries(data)
+              .map(([id, value]) => ({ id, ...value } as JoyChecklistItem))
+              .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+            onChanged(items);
+          },
+          onError
+        );
+      },
+      onError
+    );
+
+    return () => {
+      disposed = true;
+      unsubscribeOwner?.();
+      unsubscribeActive?.();
+    };
+  }
+
+  async addChecklistItem(joyId: string, text: string): Promise<JoyChecklistItem> {
+    const createdAt = new Date().toISOString();
+    const item: Omit<JoyChecklistItem, 'id'> = { text: text.trim(), checked: false, createdAt };
+
+    if (this.dataScopeService.isGuest()) {
+      await this.guestStorageService.fakeApiDelay();
+      const joys = this.readGuestJoysRecord();
+      const joyData = joys[joyId] ?? {};
+      const checklist = joyData.checklist ?? {};
+      const id = crypto.randomUUID();
+      checklist[id] = item;
+      joyData.checklist = checklist;
+      joys[joyId] = joyData;
+      this.writeGuestJoysRecord(joys);
+      return { id, ...item };
+    }
+
+    const ownerUid = await this.resolveJoyOwnerUid(joyId);
+    if (!ownerUid) throw new Error('Joy not found');
+    const itemRef = push(ref(db, `users/${ownerUid}/joys/${joyId}/checklist`));
+    await set(itemRef, item);
+    return { id: itemRef.key ?? crypto.randomUUID(), ...item };
+  }
+
+  async updateChecklistItem(
+    joyId: string,
+    itemId: string,
+    updates: Partial<Pick<JoyChecklistItem, 'text' | 'checked'>>
+  ): Promise<void> {
+    if (this.dataScopeService.isGuest()) {
+      await this.guestStorageService.fakeApiDelay();
+      const joys = this.readGuestJoysRecord();
+      const existing = joys[joyId]?.checklist?.[itemId];
+      if (existing) {
+        joys[joyId].checklist[itemId] = { ...existing, ...updates };
+        this.writeGuestJoysRecord(joys);
+      }
+      return;
+    }
+
+    const ownerUid = await this.resolveJoyOwnerUid(joyId);
+    if (!ownerUid) throw new Error('Joy not found');
+    await update(ref(db, `users/${ownerUid}/joys/${joyId}/checklist/${itemId}`), updates);
+  }
+
+  async deleteChecklistItem(joyId: string, itemId: string): Promise<void> {
+    if (this.dataScopeService.isGuest()) {
+      await this.guestStorageService.fakeApiDelay();
+      const joys = this.readGuestJoysRecord();
+      if (joys[joyId]?.checklist?.[itemId]) {
+        delete joys[joyId].checklist[itemId];
+        this.writeGuestJoysRecord(joys);
+      }
+      return;
+    }
+
+    const ownerUid = await this.resolveJoyOwnerUid(joyId);
+    if (!ownerUid) throw new Error('Joy not found');
+    await remove(ref(db, `users/${ownerUid}/joys/${joyId}/checklist/${itemId}`));
   }
 
   private toCategory(category: unknown): JoyCategory {

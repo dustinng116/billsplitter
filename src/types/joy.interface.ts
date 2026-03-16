@@ -74,6 +74,13 @@ export interface JoyExpense {
   createdAt: string;
 }
 
+export interface JoyChecklistItem {
+  id: string;
+  text: string;
+  checked: boolean;
+  createdAt: string;
+}
+
 export interface CategoryStyle {
   bgColor: string;
   textColor: string;
