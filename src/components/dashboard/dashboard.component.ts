@@ -45,6 +45,13 @@ interface SplitBillSummary {
   isPaid: boolean;
 }
 
+interface SpenderSummary {
+  key: string;
+  name: string;
+  totalSpent: number;
+  totalEarned: number;
+}
+
 interface JoyConfigForm {
   name: string;
   category: JoyCategory;
@@ -112,7 +119,6 @@ export class DashboardComponent implements OnChanges, OnDestroy {
   isSavingJoyConfig = false;
   joyConfigErrorMessage = "";
   currentUserEmail = "";
-  savingPaidSummaryKeys = new Set<string>();
 
   private unsubscribeJoy: Unsubscribe | null = null;
   private unsubscribeGroups: Unsubscribe | null = null;
@@ -134,6 +140,15 @@ export class DashboardComponent implements OnChanges, OnDestroy {
   private checklistTouchStartY = 0;
   private checklistCurrentOffset = 0;
   private checklistMovementDetected = false;
+
+  // Member details dialog expense-level paid state
+  // Key format: `${groupId}__${expenseId}` → boolean (dialog-local, current open dialog)
+  dialogExpensePaidState = new Map<string, boolean>();
+  // Persistent per-expense-member paid state across all dialogs
+  // Key format: `${groupId}__${expenseId}__${memberKey}` → boolean
+  expMemberPaidState = new Map<string, boolean>();
+  currentDialogMemberKey = '';
+
   private readonly userSubscription: Subscription;
   private lastSessionKey = '__uninitialized__';
   private loadVersion = 0;
@@ -191,8 +206,8 @@ export class DashboardComponent implements OnChanges, OnDestroy {
     return this.memberDetailsOpen.get(key) ?? false;
   }
 
-  getMemberExpenses(key: string): Array<{ groupId: string; groupName: string; expenseTitle: string; originalAmount: number; originalCurrency: AppCurrency; convertedAmount: number }> {
-    const results: Array<{ groupId: string; groupName: string; expenseTitle: string; originalAmount: number; originalCurrency: AppCurrency; convertedAmount: number }> = [];
+  getMemberExpenses(key: string): Array<{ expenseId: string; groupId: string; groupName: string; expenseTitle: string; originalAmount: number; originalCurrency: AppCurrency; convertedAmount: number }> {
+    const results: Array<{ expenseId: string; groupId: string; groupName: string; expenseTitle: string; originalAmount: number; originalCurrency: AppCurrency; convertedAmount: number }> = [];
 
     const searchRaw = (key || '').toString();
     const search = searchRaw.trim().toLowerCase();
@@ -236,6 +251,7 @@ export class DashboardComponent implements OnChanges, OnDestroy {
           const originalAmount = originalTotal * shareRatio;
 
           results.push({
+            expenseId: `${groupId}__${exp.id}`,
             groupId,
             groupName,
             expenseTitle: exp.title || '',
@@ -254,6 +270,35 @@ export class DashboardComponent implements OnChanges, OnDestroy {
     event?.stopPropagation();
     if (!this.memberDetailsDialog) return;
 
+    // Initialise per-expense paid state for this dialog
+    this.currentDialogMemberKey = item.key;
+    this.dialogExpensePaidState.clear();
+    for (const e of this.getMemberExpenses(item.key)) {
+      // e.expenseId = `${groupId}__${exp.id}`; parse to get the actual expense member key
+      const sepIdx = e.expenseId.indexOf('__');
+      const groupId = e.expenseId.substring(0, sepIdx);
+      const realExpId = e.expenseId.substring(sepIdx + 2);
+      const expMembers = this.groupExpensesMap.get(groupId)?.find(ex => ex.id === realExpId)?.members ?? [];
+      const memberKeyNorm = item.key.trim().toLowerCase();
+      // Find the matching expense member and use ITS canonical key for expMemberPaidState lookup
+      let isPaid = false;
+      for (const em of expMembers) {
+        const emKey = this.getMemberKey(em);
+        const emEmailNorm = (em.email || '').trim().toLowerCase();
+        const emNameNorm  = (em.name  || '').trim().toLowerCase();
+        const isMatch = emKey === memberKeyNorm ||
+          (emEmailNorm && emEmailNorm === memberKeyNorm) ||
+          em.id === item.key ||
+          (emNameNorm && emNameNorm === memberKeyNorm);
+        if (isMatch) {
+          const actualPairKey = `${groupId}__${realExpId}__${emKey}`;
+          isPaid = this.expMemberPaidState.get(actualPairKey) ?? !!(em.isPaid);
+          break;
+        }
+      }
+      this.dialogExpensePaidState.set(e.expenseId, isPaid);
+    }
+
     const title = this.translationService.t('dashboard.splittedExpenses') || 'Splitted Expenses';
     const closeLabel = this.translationService.t('friends.cancel') || 'Cancel';
 
@@ -261,7 +306,7 @@ export class DashboardComponent implements OnChanges, OnDestroy {
       title,
       content: this.memberDetailsDialog,
       context: { key: item.key, name: item.name },
-      bodyClass: 'p-4',
+      bodyClass: 'p-0',
       actions: [
         {
           label: closeLabel,
@@ -270,7 +315,137 @@ export class DashboardComponent implements OnChanges, OnDestroy {
           handler: () => this.commonDialogService.close(),
         },
       ],
+      onClose: () => {
+        this.currentDialogMemberKey = '';
+        this.dialogExpensePaidState.clear();
+        this.cdr.detectChanges();
+      },
     });
+  }
+
+  isDialogExpensePaid(expenseId: string): boolean {
+    return this.dialogExpensePaidState.get(expenseId) ?? false;
+  }
+
+  async toggleDialogExpensePaid(memberKey: string, expenseId: string, event: Event): Promise<void> {
+    const checked = (event.target as HTMLInputElement).checked;
+    // Update dialog-local state
+    this.dialogExpensePaidState.set(expenseId, checked);
+
+    // Parse expenseId → groupId + realExpenseId
+    const sepIdx = expenseId.indexOf('__');
+    const groupId = expenseId.substring(0, sepIdx);
+    const realExpId = expenseId.substring(sepIdx + 2);
+
+    // Optimistically update the expense member in memory
+    const expenses = this.groupExpensesMap.get(groupId);
+    const expense = expenses?.find(e => e.id === realExpId);
+    if (expense) {
+      const memberKeyNorm = memberKey.trim().toLowerCase();
+      const updatedMembers = (expense.members ?? []).map(em => {
+        const emKey = this.getMemberKey(em);
+        const emEmailNorm = (em.email || '').trim().toLowerCase();
+        const emNameNorm  = (em.name  || '').trim().toLowerCase();
+        const isMatch = emKey === memberKeyNorm ||
+          (emEmailNorm && emEmailNorm === memberKeyNorm) ||
+          em.id === memberKey ||
+          (emNameNorm && emNameNorm === memberKeyNorm);
+        if (isMatch) {
+          // Also make sure the key spenderSummaries uses (emKey) is registered in expMemberPaidState
+          const actualPairKey = `${groupId}__${realExpId}__${emKey}`;
+          this.expMemberPaidState.set(actualPairKey, checked);
+          return { ...em, isPaid: checked };
+        }
+        return em;
+      });
+      expense.members = updatedMembers;
+      // Persist to Firebase
+      if (this.joyId) {
+        try {
+          await this.joyService.updateExpenseMembers(this.joyId, groupId, realExpId, updatedMembers);
+        } catch (err) {
+          console.error('Failed to persist expense member paid state', err);
+        }
+      }
+    }
+
+    // Sync outer member isPaid without cascading back down to expenses.
+    // All checked → mark outer as paid; any unchecked → mark outer as unpaid.
+    const allExpenses = this.getMemberExpenses(memberKey);
+    const allChecked = allExpenses.length > 0 &&
+      allExpenses.every(e => this.dialogExpensePaidState.get(e.expenseId) ?? false);
+
+    // Update the visual cross-line on the split-bill row and persist to groups
+    // but do NOT cascade "syncExpenseLevelPaidStateForMember" again.
+    const splitItem = this.splitBillSummaries.find(s => s.key === memberKey);
+    if (splitItem) {
+      if (allChecked && !splitItem.isPaid) {
+        splitItem.isPaid = true;
+        void this.setMemberPaidInGroupsOnly(memberKey, true);
+      } else if (!checked && splitItem.isPaid) {
+        splitItem.isPaid = false;
+        void this.setMemberPaidInGroupsOnly(memberKey, false);
+      }
+    }
+
+    this.cdr.detectChanges();
+  }
+
+  get dialogTotalPaid(): number {
+    return this.getMemberExpenses(this.currentDialogMemberKey)
+      .filter(e => this.dialogExpensePaidState.get(e.expenseId) ?? false)
+      .reduce((sum, e) => sum + e.convertedAmount, 0);
+  }
+
+  get dialogHasAnyPaid(): boolean {
+    for (const v of this.dialogExpensePaidState.values()) {
+      if (v) return true;
+    }
+    return false;
+  }
+
+  /**
+   * Updates only the group-member isPaid flag (no expense-level cascade).
+   * Used by inner-dialog checkboxes to reflect back on the outer split-bill
+   * without triggering another outward-inward propagation loop.
+   */
+  private async setMemberPaidInGroupsOnly(memberKey: string, checked: boolean): Promise<void> {
+    const memberKeyNorm = memberKey.trim().toLowerCase();
+    if (!this.joyId) return;
+
+    const nextGroups = this.groupCards.map(group => {
+      let changed = false;
+      const nextMembers = (group.members ?? []).map(member => {
+        const memKey = this.getMemberKey(member);
+        const memEmail = (member.email || '').trim().toLowerCase();
+        const memName  = (member.name  || '').trim().toLowerCase();
+        const isMatch = memKey === memberKeyNorm ||
+          (memEmail && memEmail === memberKeyNorm) ||
+          member.id === memberKey ||
+          (memName && memName === memberKeyNorm);
+        if (isMatch && !!(member.isPaid) !== checked) {
+          changed = true;
+          return { ...member, isPaid: checked };
+        }
+        return member;
+      });
+      return changed ? { ...group, members: nextMembers } : group;
+    });
+
+    const changedGroups = nextGroups.filter((g, i) => g !== this.groupCards[i]);
+    if (!changedGroups.length) return;
+
+    this.groupCards = nextGroups;
+    this.cdr.detectChanges();
+
+    try {
+      await Promise.all(changedGroups.map(group => {
+        const { id, ...payload } = group;
+        return this.joyService.updateJoyGroup(this.joyId!, id, payload);
+      }));
+    } catch (err) {
+      console.error('Failed to update group member isPaid from dialog', err);
+    }
   }
 
   getGroupTotal(groupId: string): number {
@@ -759,6 +934,59 @@ export class DashboardComponent implements OnChanges, OnDestroy {
     return Array.from(totals.values()).sort((a, b) => b.amount - a.amount);
   }
 
+  private resolveSpenderName(paidByRaw: string): string {
+    const normalized = paidByRaw.trim().toLowerCase();
+    for (const group of this.groupCards) {
+      for (const member of group.members ?? []) {
+        const email = (member.email || '').trim().toLowerCase();
+        const name  = (member.name  || '').trim().toLowerCase();
+        if (email === normalized || name === normalized || member.id === paidByRaw) {
+          return member.name || paidByRaw;
+        }
+      }
+    }
+    return paidByRaw;
+  }
+
+  get spenderSummaries(): SpenderSummary[] {
+    const map = new Map<string, { name: string; totalSpent: number; totalEarned: number }>();
+
+    for (const [groupId, expenses] of this.groupExpensesMap.entries()) {
+      for (const exp of expenses) {
+        const paidByRaw = (exp.paidBy || '').trim();
+        if (!paidByRaw) continue;
+        const paidByKey = paidByRaw.toLowerCase();
+
+        const srcCurrency = (exp.currency as AppCurrency) ?? this.currencyService.currentCurrency();
+        const originalTotal = typeof exp.originalAmount === 'number' ? exp.originalAmount : exp.amount;
+        const systemTotal = this.currencyService.convertUsingRateHeuristic(originalTotal, srcCurrency);
+
+        if (!map.has(paidByKey)) {
+          map.set(paidByKey, { name: this.resolveSpenderName(paidByRaw), totalSpent: 0, totalEarned: 0 });
+        }
+
+        const entry = map.get(paidByKey)!;
+        entry.totalSpent += systemTotal;
+
+        // Sum shareAmounts for members whose per-expense paid state is true
+        for (const em of exp.members ?? []) {
+          const emKey = this.getMemberKey(em);
+          const persistKey = `${groupId}__${exp.id}__${emKey}`;
+          const isPaidMember = this.expMemberPaidState.get(persistKey) ?? !!(em.isPaid);
+          if (isPaidMember) {
+            const share = typeof em.shareAmount === 'number' && em.shareAmount > 0 ? em.shareAmount : 0;
+            entry.totalEarned += share;
+          }
+        }
+      }
+    }
+
+    return Array.from(map.entries())
+      .map(([key, v]) => ({ key, ...v }))
+      .filter(s => s.totalSpent > 0)
+      .sort((a, b) => b.totalSpent - a.totalSpent);
+  }
+
   onEditGroup(group: JoyGroup, event: Event) {
     event.stopPropagation();
     this.editGroupClicked.emit(group);
@@ -788,201 +1016,19 @@ export class DashboardComponent implements OnChanges, OnDestroy {
     return group.totalSpent / memberCount;
   }
 
-  isSplitBillSaving(item: SplitBillSummary): boolean {
-    return this.savingPaidSummaryKeys.has(item.key);
+  isAllDialogExpensesPaid(key: string): boolean {
+    const expenses = this.getMemberExpenses(key);
+    return expenses.length > 0 && expenses.every(e => this.dialogExpensePaidState.get(e.expenseId) ?? false);
   }
 
-  onSplitItemClick(item: SplitBillSummary, event: MouseEvent): void {
-    const target = event?.target as HTMLElement | null;
-    // If the click originated from an interactive child (checkbox, button, link),
-    // let that control handle the event itself.
-    if (target && target.closest('input, button, a')) {
-      return;
-    }
-
-    // Prevent the label's native for= activation — without this the checkbox
-    // gets toggled twice (once by our synthetic call below, once by the label's
-    // default activation), resulting in no net change.
-    event.preventDefault();
-
-    // Directly toggle with the correct next state
-    const syntheticEvent = { target: { checked: !item.isPaid } } as unknown as Event;
-    void this.toggleSplitBillPaid(item, syntheticEvent);
-  }
-
-  async toggleSplitBillPaid(item: SplitBillSummary, event: Event): Promise<void> {
-    const input = event.target as HTMLInputElement | null;
-    const checked = input ? input.checked : !item.isPaid;
-
-    // Optimistically update the UI so touch/click feels immediate
-    item.isPaid = checked;
-    this.cdr.detectChanges();
-
-    if (!this.joyId || this.isSplitBillSaving(item)) {
-      // If we don't have a joyId or it's already saving, don't attempt persistence
-      if (input) input.checked = item.isPaid;
-      return;
-    }
-
-    const previousGroups = this.groupCards.map((group) => ({
-      ...group,
-      members: (group.members ?? []).map((member) => ({ ...member }))
-    }));
-
-    // Match by email (primary), then by key/id, then by name — all case-insensitive.
-    // Also handles the case where the group member has no email but the
-    // expense member (from which item.key was derived) does.
-    const matchMember = (member: JoyGroupMember): boolean => {
-      const itemEmail = (item.email || '').trim().toLowerCase();
-      const memEmail  = (member.email || '').trim().toLowerCase();
-      if (itemEmail && memEmail && itemEmail === memEmail) return true;
-      if (item.key && (member.id === item.key || this.getMemberKey(member) === item.key)) return true;
-      if (item.name && member.name &&
-          item.name.trim().toLowerCase() === member.name.trim().toLowerCase()) return true;
-      return false;
-    };
-
-    const nextGroups = this.groupCards.map((group) => {
-      let changed = false;
-      const nextMembers = (group.members ?? []).map((member) => {
-        if (!matchMember(member)) {
-          return member;
-        }
-
-        if (!!member.isPaid === checked) {
-          return member;
-        }
-
-        changed = true;
-        return {
-          ...member,
-          isPaid: checked
-        };
-      });
-
-      return changed ? { ...group, members: nextMembers } : group;
-    });
-
-    const changedGroups = nextGroups.filter((group, index) => group !== this.groupCards[index]);
-
-    // Apply optimistic group update locally
-    if (changedGroups.length) {
-      this.savingPaidSummaryKeys.add(item.key);
-      this.groupCards = nextGroups;
-      this.cdr.detectChanges();
-
-      try {
-        await Promise.all(
-          changedGroups.map((group) => {
-            const { id, ...groupPayload } = group;
-            return this.joyService.updateJoyGroup(this.joyId, id, groupPayload);
-          })
-        );
-      } catch (error) {
-        console.error("Failed to update split bill paid state.", error);
-        this.groupCards = previousGroups;
-        item.isPaid = !checked;
-        if (input) input.checked = item.isPaid;
-      } finally {
-        this.savingPaidSummaryKeys.delete(item.key);
-        this.cdr.detectChanges();
-      }
-    } else {
-      // Fallback: try to locate matching members inside expense entries and
-      // promote/update them into their parent group's member list so we can
-      // persist the paid state. This handles cases where expenses contain
-      // members not present in the group's members array.
-      const fallbackChangedGroups: JoyGroup[] = [];
-
-      for (const group of this.groupCards) {
-        const expenses = this.groupExpensesMap.get(group.id) ?? [];
-        let mutated = false;
-        const nextMembers = (group.members ?? []).map((m) => ({ ...m }));
-
-        for (const exp of expenses) {
-          const expMembers = exp.members ?? [];
-          for (const em of expMembers) {
-            const itemEmail = (item.email || '').trim().toLowerCase();
-            const emEmail = (em.email || '').trim().toLowerCase();
-            const emName = (em.name || '').trim().toLowerCase();
-            const matches = itemEmail && emEmail === itemEmail || (em.id && em.id === item.key) || (item.name && emName === item.name.trim().toLowerCase());
-            if (!matches) continue;
-
-            // find or add member in group's members
-            const existingIndex = nextMembers.findIndex((mm) => {
-              const mmEmail = (mm.email || '').trim().toLowerCase();
-              return (item.email && mmEmail === item.email.trim().toLowerCase()) || mm.id === em.id || (mm.name && mm.name.trim().toLowerCase() === (em.name || '').trim().toLowerCase());
-            });
-
-            if (existingIndex >= 0) {
-              const mm = nextMembers[existingIndex];
-              if (!!mm.isPaid !== checked) {
-                nextMembers[existingIndex] = { ...mm, isPaid: checked };
-                mutated = true;
-              }
-            } else {
-              // create a conservative member entry from expense member info
-              const newMember: JoyGroupMember = {
-                id: em.id || `m_${Date.now()}_${Math.random().toString(36).slice(2,8)}`,
-                name: em.name || item.name || this.translationService.t('groupDetail.unknown'),
-                email: em.email || item.email || '',
-                phone: em.phone,
-                initials: this.getInitials(em.name || item.name || ''),
-                avatar: em.avatar,
-                shareAmount: em.shareAmount,
-                percentage: em.percentage,
-                customAmount: em.customAmount,
-                isPaid: checked,
-              };
-
-              nextMembers.push(newMember);
-              mutated = true;
-            }
-          }
-        }
-
-        if (mutated) {
-          fallbackChangedGroups.push({ ...group, members: nextMembers });
-        }
-      }
-
-      if (fallbackChangedGroups.length) {
-        // persist fallback updates
-        this.savingPaidSummaryKeys.add(item.key);
-        const previous = this.groupCards.map((g) => ({ ...g, members: (g.members ?? []).map(m => ({ ...m })) }));
-        // apply optimistically
-        this.groupCards = this.groupCards.map((g) => {
-          const found = fallbackChangedGroups.find((fg) => fg.id === g.id);
-          return found ? found : g;
-        });
-        this.cdr.detectChanges();
-
-        try {
-          await Promise.all(fallbackChangedGroups.map((group) => {
-            const { id, ...payload } = group;
-            return this.joyService.updateJoyGroup(this.joyId!, id, payload);
-          }));
-        } catch (err) {
-          console.error('Failed to persist fallback member paid state', err);
-          this.groupCards = previous;
-          item.isPaid = !checked;
-        } finally {
-          this.savingPaidSummaryKeys.delete(item.key);
-          this.cdr.detectChanges();
-        }
-      } else {
-        console.info('No matching group members found to persist split-paid state for', item);
-      }
-    }
-  }
-
-  private isSplitBillMemberMatch(item: SplitBillSummary, member: JoyGroupMember): boolean {
-    const itemEmail = this.normalizeIdentity(item.email);
-    if (itemEmail) {
-      return this.normalizeIdentity(member.email) === itemEmail;
-    }
-
-    return this.getMemberKey(member) === item.key;
+  async toggleAllDialogExpensesPaid(key: string, event: Event): Promise<void> {
+    const checked = (event.target as HTMLInputElement).checked;
+    const expenses = this.getMemberExpenses(key);
+    await Promise.all(
+      expenses.map(e =>
+        this.toggleDialogExpensePaid(key, e.expenseId, { target: { checked } } as unknown as Event)
+      )
+    );
   }
 
   onGroupClick(groupId: string): void {
@@ -1203,12 +1249,16 @@ export class DashboardComponent implements OnChanges, OnDestroy {
       this.lastLoadedJoyId = '';
       this.selectedJoy = null;
       this.groupCards = [];
+      this.expMemberPaidState.clear();
+      this.dialogExpensePaidState.clear();
       this.cdr.detectChanges();
       return;
     }
 
     this.selectedJoy = null;
     this.groupCards = [];
+    this.expMemberPaidState.clear();
+    this.dialogExpensePaidState.clear();
 
     const tryFinishLoading = () => {
       if (!joyResolved || !groupsResolved || currentLoadVersion !== this.loadVersion) {
@@ -1267,6 +1317,7 @@ export class DashboardComponent implements OnChanges, OnDestroy {
 
           this.groupCards = groups;
           this.syncGroupExpensesListeners(groups);
+          this.cdr.detectChanges();
           groupsResolved = true;
           tryFinishLoading();
         });
@@ -1279,6 +1330,7 @@ export class DashboardComponent implements OnChanges, OnDestroy {
           }
 
           this.groupCards = [];
+          this.cdr.detectChanges();
           groupsResolved = true;
           tryFinishLoading();
         });
@@ -1323,6 +1375,14 @@ export class DashboardComponent implements OnChanges, OnDestroy {
         (expenses) => {
           this.ngZone.run(() => {
             this.groupExpensesMap.set(group.id, expenses);
+            // Populate persistent per-expense-member paid state from freshly loaded expenses
+            for (const exp of expenses) {
+              for (const em of exp.members ?? []) {
+                const emKey = this.getMemberKey(em);
+                const pairKey = `${group.id}__${exp.id}__${emKey}`;
+                this.expMemberPaidState.set(pairKey, !!(em.isPaid));
+              }
+            }
             this.cdr.detectChanges();
           });
         },
