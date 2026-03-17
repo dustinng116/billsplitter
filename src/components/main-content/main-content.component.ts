@@ -65,6 +65,7 @@ export class MainContentComponent implements OnInit {
   private readonly routeSubscription: Subscription;
   readonly supportedCurrencies: AppCurrency[];
   isSyncingCurrencyRates = false;
+  syncingCurrencyKey: AppCurrency | null = null;
 
   signInWithGoogleAccount() {
     if ((window as any).firebaseAuthSignInWithGoogle) {
@@ -122,7 +123,8 @@ export class MainContentComponent implements OnInit {
         this.isPageLoading = false;
       }
       if (state.view === "account") {
-        void this.syncLiveCurrencyRates(this.currencyService.currentCurrency());
+        // Do not auto-load API on account page — loads from local storage only.
+        // User must click the refresh button next to a rate row to fetch from API.
       }
     });
   }
@@ -280,7 +282,7 @@ export class MainContentComponent implements OnInit {
 
   setCurrency(currency: AppCurrency): void {
     this.currencyService.setCurrency(currency);
-    void this.syncLiveCurrencyRates(currency);
+    // Do NOT auto-fetch rates here — user must click refresh per row.
     void this.activityService.logActivity({
       type: "change-currency",
       title: "Changed currency",
@@ -300,6 +302,20 @@ export class MainContentComponent implements OnInit {
 
   getCurrencyRateInputValue(currency: AppCurrency): number {
     return this.currencyService.getCurrencyRate(currency);
+  }
+
+  isCurrencyRowSyncing(currency: AppCurrency): boolean {
+    return this.syncingCurrencyKey === currency;
+  }
+
+  syncRateForCurrency(currency: AppCurrency): void {
+    if (this.isSyncingCurrencyRates || currency === this.currencyService.currentCurrency()) return;
+    this.syncingCurrencyKey = currency;
+    void this.syncLiveCurrencyRates(this.currencyService.currentCurrency()).then(() => {
+      this.syncingCurrencyKey = null;
+    }).catch(() => {
+      this.syncingCurrencyKey = null;
+    });
   }
 
   private async syncLiveCurrencyRates(

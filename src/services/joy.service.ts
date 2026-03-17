@@ -713,6 +713,31 @@ export class JoyService {
     await update(groupRef, { totalSpent: nextTotal });
   }
 
+  async updateExpenseMembers(
+    joyId: string,
+    groupId: string,
+    expenseId: string,
+    members: import('../types/joy.interface').JoyGroupMember[]
+  ): Promise<void> {
+    if (this.dataScopeService.isGuest()) {
+      await this.guestStorageService.fakeApiDelay();
+      const joys = this.readGuestJoysRecord();
+      const expense = joys[joyId]?.groups?.[groupId]?.expenses?.[expenseId];
+      if (expense) {
+        expense.members = members;
+        this.writeGuestJoysRecord(joys);
+      }
+      return;
+    }
+
+    const ownerUid = await this.resolveJoyOwnerUid(joyId);
+    if (!ownerUid) throw new Error('Joy not found');
+    await set(
+      ref(db, `users/${ownerUid}/joys/${joyId}/groups/${groupId}/expenses/${expenseId}/members`),
+      members
+    );
+  }
+
   async deleteJoyGroup(joyId: string, groupId: string): Promise<void> {
     if (this.dataScopeService.isGuest()) {
       await this.guestStorageService.fakeApiDelay();
