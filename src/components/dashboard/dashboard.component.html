@@ -623,7 +623,7 @@
   ></joys-add-expense-dialog>
 
   <ng-template #memberDetailsDialog let-key="key" let-name="name">
-    <div class="flex flex-col">
+    <div class="flex flex-col relative min-h-0">
 
       <!-- Member name header with select-all checkbox -->
       <div *ngIf="name" class="shrink-0 px-4 pt-4 pb-3 flex items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800">
@@ -640,8 +640,8 @@
         </label>
       </div>
 
-      <!-- Scrollable expense list -->
-      <div class="overflow-y-auto" [ngClass]="getMemberExpenses(key).length > 6 ? 'max-h-[360px]' : ''">
+      <!-- Scrollable expense list (keeps Total Paid bar outside of scroll) -->
+      <div class="min-h-0 overflow-y-auto" [ngClass]="getMemberExpenses(key).length > 5 ? 'max-h-[450px] pb-20' : 'pb-20'">
         <div
           *ngFor="let e of getMemberExpenses(key)"
           class="rounded-xl bg-slate-50 dark:bg-slate-800/60 px-4 py-3 mx-4 mt-3"
@@ -681,14 +681,12 @@
         <!-- Bottom spacing so last item isn't hidden under the total bar -->
         <div class="h-3"></div>
       </div>
-
-      <!-- Total Paid bar — floats above actions footer, visible when ≥1 expense is checked -->
-      <div
-        *ngIf="dialogHasAnyPaid"
-        class="shrink-0 flex items-center justify-between border-t border-slate-200 dark:border-slate-700 bg-white/95 dark:bg-slate-900/95 px-4 py-3 backdrop-blur-sm"
-      >
-        <span class="text-sm font-semibold text-slate-600 dark:text-slate-400">{{ 'dashboard.totalPaid' | translate }}</span>
-        <span class="text-sm font-bold text-primary">{{ formatAmount(dialogTotalPaid) }}</span>
+      <!-- Total Paid bar — fixed above the dialog actions (not part of the scroll) -->
+      <div *ngIf="dialogHasAnyPaid" class="shrink-0 absolute left-0 right-0 bottom-0 z-30 border-t border-slate-200 dark:border-slate-700 bg-white/95 dark:bg-slate-900/95 px-4 py-3 backdrop-blur-sm">
+        <div class="flex items-center justify-between">
+          <span class="text-sm font-semibold text-slate-600 dark:text-slate-400">{{ 'dashboard.totalPaid' | translate }}</span>
+          <span class="text-sm font-bold text-primary">{{ formatAmount(dialogTotalPaid) }}</span>
+        </div>
       </div>
     </div>
   </ng-template>

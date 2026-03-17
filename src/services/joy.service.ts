@@ -647,6 +647,11 @@ export class JoyService {
       group.expenses = expenses;
       const currentTotal = typeof group.totalSpent === 'number' ? group.totalSpent : 0;
       group.totalSpent = currentTotal + expenseData.amount;
+      // When a new expense is added, reset any per-group member isPaid flags
+      // so split-bills reflect the new outstanding amounts.
+      if (Array.isArray(group.members)) {
+        group.members = group.members.map((m: any) => ({ ...(m || {}), isPaid: false }));
+      }
       groups[groupId] = group;
       joyData.groups = groups;
       joys[joyId] = joyData;
@@ -670,6 +675,30 @@ export class JoyService {
     const groupRef = ref(db, `users/${ownerUid}/joys/${joyId}/groups/${groupId}`);
     const currentTotal = (await this.getGroupTotalSpent(joyId, groupId, ownerUid)) ?? 0;
     await update(groupRef, { totalSpent: currentTotal + expenseData.amount });
+
+    // After creating an expense, clear any persisted `isPaid` flags on the
+    // group's members so split-bill rows don't remain marked paid.
+    try {
+      const membersRef = ref(db, `users/${ownerUid}/joys/${joyId}/groups/${groupId}/members`);
+      const membersSnap = await get(membersRef);
+      if (membersSnap.exists()) {
+        const members = membersSnap.val() as any[];
+        if (Array.isArray(members)) {
+          const nextMembers = members.map(m => ({ ...(m || {}), isPaid: false }));
+          await set(membersRef, nextMembers);
+        } else if (members && typeof members === 'object') {
+          // If members stored as keyed object, convert each entry
+          const nextObj: Record<string, any> = {};
+          Object.entries(members).forEach(([k, v]) => {
+            nextObj[k] = { ...(v as any), isPaid: false };
+          });
+          await set(membersRef, nextObj);
+        }
+      }
+    } catch (err) {
+      // Non-fatal: log and continue
+      console.error('Failed to clear group member isPaid flags after adding expense', err);
+    }
 
     return {
       id: expenseRef.key ?? crypto.randomUUID(),

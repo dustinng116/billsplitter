@@ -1317,6 +1317,7 @@ export class DashboardComponent implements OnChanges, OnDestroy {
 
           this.groupCards = groups;
           this.syncGroupExpensesListeners(groups);
+          this.cdr.detectChanges();
           groupsResolved = true;
           tryFinishLoading();
         });
@@ -1329,6 +1330,7 @@ export class DashboardComponent implements OnChanges, OnDestroy {
           }
 
           this.groupCards = [];
+          this.cdr.detectChanges();
           groupsResolved = true;
           tryFinishLoading();
         });
