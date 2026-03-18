@@ -1,7 +1,7 @@
 <div class="p-4 md:p-8 max-w-6xl mx-auto">
   <ng-container *ngIf="groupDetail as group">
     <header class="md:hidden pb-4">
-      <div class="relative min-h-[160px] overflow-hidden rounded-[28px] shadow-sm">
+      <div class="relative min-h-[100px] overflow-hidden rounded-[28px] shadow-sm">
         <img
           [src]="hasImage(group.photo) ? group.photo : 'https://images.unsplash.com/photo-1525625293386-3f8f99389edd?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80'"
           [alt]="group.name" class="absolute inset-0 h-full w-full object-cover" />
@@ -15,7 +15,7 @@
           <span *ngIf="!isUploadingPhoto" class="material-symbols-outlined text-[18px]">add_a_photo</span>
         </button> -->
 
-        <div class="relative z-10 flex min-h-[160px] flex-col justify-between p-4">
+        <div class="relative z-10 flex min-h-[100px] flex-col justify-between p-4">
           <div class="flex items-center justify-between gap-3">
             <button type="button" (click)="onBack()"
               class="inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/30 bg-white/15 text-white backdrop-blur-md transition-colors hover:bg-white/25"
