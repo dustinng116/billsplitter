@@ -1,6 +1,6 @@
 import { Injectable, signal } from '@angular/core';
 
-export type AppCurrency = 'USD' | 'VND' | 'SGD' | 'RM';
+export type AppCurrency = 'USD' | 'VND' | 'SGD' | 'MYR';
 
 type CurrencyRates = Record<AppCurrency, number>;
 
@@ -13,7 +13,7 @@ export class CurrencyService {
   private readonly currencySignal = signal<AppCurrency>(this.readInitialCurrency());
   private readonly ratesSignal = signal<CurrencyRates>(this.readInitialRates());
 
-  readonly supportedCurrencies: AppCurrency[] = ['USD', 'VND', 'SGD', 'RM'];
+  readonly supportedCurrencies: AppCurrency[] = ['USD', 'VND', 'SGD', 'MYR'];
 
   currentCurrency(): AppCurrency {
     return this.currencySignal();
@@ -119,7 +119,7 @@ export class CurrencyService {
   }
 
   usesSuffixSymbol(currency: AppCurrency = this.currentCurrency()): boolean {
-    return currency === 'VND';
+    return currency === 'VND' || currency === 'MYR';
   }
 
   getCurrencySymbol(currency: AppCurrency = this.currentCurrency()): string {
@@ -127,7 +127,7 @@ export class CurrencyService {
       USD: '$',
       VND: 'đ',
       SGD: 'S$',
-      RM: 'RM'
+      MYR: 'MYR'
     };
 
     return symbolMap[currency];
@@ -160,37 +160,35 @@ export class CurrencyService {
   }
 
   private formatByCurrency(amount: number, currency: AppCurrency): string {
-    const formatterMap: Record<AppCurrency, { locale: string; currency: string; minFractionDigits: number; maxFractionDigits: number; suffix?: boolean }> = {
-      USD: { locale: 'en-US', currency: 'USD', minFractionDigits: 2, maxFractionDigits: 2 },
-      VND: { locale: 'vi-VN', currency: 'VND', minFractionDigits: 0, maxFractionDigits: 0, suffix: true },
-      SGD: { locale: 'en-SG', currency: 'SGD', minFractionDigits: 2, maxFractionDigits: 2 },
-      RM: { locale: 'ms-MY', currency: 'MYR', minFractionDigits: 2, maxFractionDigits: 2 }
-    };
+    const sign = amount < 0 ? '-' : '';
+    const abs = Math.abs(amount);
 
-    const formatter = formatterMap[currency];
-    const roundedAmount = currency === 'VND' ? Math.round(amount) : amount;
-
-    if (formatter.suffix) {
-      const parts = new Intl.NumberFormat('de-DE', {
-        maximumFractionDigits: 0,
-        minimumFractionDigits: 0
-      }).format(Math.abs(roundedAmount));
-      return `${roundedAmount < 0 ? '-' : ''}${parts} ${this.getCurrencySymbol(currency)}`;
+    if (currency === 'VND') {
+      const num = new Intl.NumberFormat('de-DE', { maximumFractionDigits: 0, minimumFractionDigits: 0 }).format(Math.round(abs));
+      return `${sign}${num} đ`;
     }
-
-    return new Intl.NumberFormat(formatter.locale, {
-      style: 'currency',
-      currency: formatter.currency,
-      minimumFractionDigits: formatter.minFractionDigits,
-      maximumFractionDigits: formatter.maxFractionDigits
-    }).format(roundedAmount);
+    if (currency === 'MYR') {
+      const num = new Intl.NumberFormat('en-US', { maximumFractionDigits: 2, minimumFractionDigits: 2 }).format(abs);
+      return `${sign}${num} MYR`;
+    }
+    if (currency === 'SGD') {
+      const num = new Intl.NumberFormat('en-US', { maximumFractionDigits: 2, minimumFractionDigits: 2 }).format(abs);
+      return `${sign}S$ ${num}`;
+    }
+    // USD
+    const num = new Intl.NumberFormat('en-US', { maximumFractionDigits: 2, minimumFractionDigits: 2 }).format(abs);
+    return `${sign}$ ${num}`;
   }
 
   private readInitialCurrency(): AppCurrency {
     try {
       const savedCurrency = localStorage.getItem(this.storageKey);
-      if (savedCurrency === 'USD' || savedCurrency === 'VND' || savedCurrency === 'SGD' || savedCurrency === 'RM') {
-        return savedCurrency;
+      if (savedCurrency === 'USD' || savedCurrency === 'VND' || savedCurrency === 'SGD' || savedCurrency === 'MYR') {
+        return savedCurrency as AppCurrency;
+      }
+      // Migrate old 'RM' persisted value to 'MYR'
+      if (savedCurrency === 'RM') {
+        return 'MYR';
       }
       return 'VND';
     } catch {
@@ -203,7 +201,7 @@ export class CurrencyService {
       USD: 1,
       VND: 1,
       SGD: 1,
-      RM: 1
+      MYR: 1
     };
 
     try {
@@ -212,12 +210,14 @@ export class CurrencyService {
         return defaults;
       }
 
-      const parsed = JSON.parse(savedRates) as Partial<Record<AppCurrency, number>>;
+      const parsed = JSON.parse(savedRates) as Partial<Record<string, number>>;
       return {
-        USD: Number.isFinite(parsed.USD) && parsed.USD! > 0 ? parsed.USD! : 1,
-        VND: Number.isFinite(parsed.VND) && parsed.VND! > 0 ? parsed.VND! : 1,
-        SGD: Number.isFinite(parsed.SGD) && parsed.SGD! > 0 ? parsed.SGD! : 1,
-        RM: Number.isFinite(parsed.RM) && parsed.RM! > 0 ? parsed.RM! : 1
+        USD: Number.isFinite(parsed['USD']) && parsed['USD']! > 0 ? parsed['USD']! : 1,
+        VND: Number.isFinite(parsed['VND']) && parsed['VND']! > 0 ? parsed['VND']! : 1,
+        SGD: Number.isFinite(parsed['SGD']) && parsed['SGD']! > 0 ? parsed['SGD']! : 1,
+        // support old 'RM' key migrating to 'MYR'
+        MYR: Number.isFinite(parsed['MYR']) && parsed['MYR']! > 0 ? parsed['MYR']! :
+             Number.isFinite(parsed['RM']) && (parsed['RM'] as number) > 0 ? (parsed['RM'] as number) : 1
       };
     } catch {
       return defaults;

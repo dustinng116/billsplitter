@@ -2,7 +2,7 @@ import { Injectable } from '@angular/core';
 import { getAuth } from 'firebase/auth';
 import { get, onValue, push, ref, remove, set, update, type Unsubscribe } from 'firebase/database';
 import { db } from '../firebase';
-import { CategoryStyle, Joy, JoyCategory, JoyChecklistItem, JoyCreator, JoyExpense, JoyGroup, JoyStatus, StatusStyle } from '../types/joy.interface';
+import { CategoryStyle, Joy, JoyCategory, JoyChecklistItem, JoyCreator, JoyDepositEntry, JoyExpense, JoyGroup, JoyStatus, StatusStyle } from '../types/joy.interface';
 import { DataScopeService } from './data-scope.service';
 import { GuestStorageService } from './guest-storage.service';
 import { UserDirectoryService } from './user-directory.service';
@@ -1198,6 +1198,87 @@ export class JoyService {
     const ownerUid = await this.resolveJoyOwnerUid(joyId);
     if (!ownerUid) throw new Error('Joy not found');
     await remove(ref(db, `users/${ownerUid}/joys/${joyId}/checklist/${itemId}`));
+  }
+
+  listenToJoyDepositEntries(
+    joyId: string,
+    onChanged: (entries: JoyDepositEntry[]) => void,
+    onError: (error: unknown) => void
+  ): Unsubscribe {
+    if (this.dataScopeService.isGuest()) {
+      const emitEntries = () => {
+        const joys = this.readGuestJoysRecord();
+        const depositsData = joys[joyId]?.deposits as Record<string, Omit<JoyDepositEntry, 'id'>> | undefined;
+        if (!depositsData) { onChanged([]); return; }
+        const entries = Object.entries(depositsData)
+          .map(([id, value]) => ({ id, ...value } as JoyDepositEntry))
+          .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+        onChanged(entries);
+      };
+      void this.guestStorageService.fakeApiDelay().then(emitEntries).catch(onError);
+      const unsubGuest = this.guestStorageService.subscribeKey(this.guestJoysKey, emitEntries);
+      return () => unsubGuest();
+    }
+
+    let unsubscribeOwner: Unsubscribe | null = null;
+    let unsubscribeActive: Unsubscribe | null = null;
+    let disposed = false;
+
+    unsubscribeOwner = this.listenToJoyOwnerUid(
+      joyId,
+      (ownerUid) => {
+        if (disposed) return;
+        unsubscribeActive?.();
+        unsubscribeActive = null;
+        if (!ownerUid) { onChanged([]); return; }
+        unsubscribeActive = onValue(
+          ref(db, `users/${ownerUid}/joys/${joyId}/deposits`),
+          (snapshot) => {
+            if (!snapshot.exists()) { onChanged([]); return; }
+            const data = snapshot.val() as Record<string, Omit<JoyDepositEntry, 'id'>>;
+            const entries = Object.entries(data)
+              .map(([id, value]) => ({ id, ...value } as JoyDepositEntry))
+              .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+            onChanged(entries);
+          },
+          onError
+        );
+      },
+      onError
+    );
+
+    return () => {
+      disposed = true;
+      unsubscribeOwner?.();
+      unsubscribeActive?.();
+    };
+  }
+
+  async addJoyDepositEntry(
+    joyId: string,
+    entry: Omit<JoyDepositEntry, 'id' | 'createdAt'>
+  ): Promise<JoyDepositEntry> {
+    const createdAt = new Date().toISOString();
+    const payload: Omit<JoyDepositEntry, 'id'> = { ...entry, createdAt };
+
+    if (this.dataScopeService.isGuest()) {
+      await this.guestStorageService.fakeApiDelay();
+      const joys = this.readGuestJoysRecord();
+      const joyData = joys[joyId] ?? {};
+      const deposits = joyData.deposits ?? {};
+      const id = crypto.randomUUID();
+      deposits[id] = payload;
+      joyData.deposits = deposits;
+      joys[joyId] = joyData;
+      this.writeGuestJoysRecord(joys);
+      return { id, ...payload };
+    }
+
+    const ownerUid = await this.resolveJoyOwnerUid(joyId);
+    if (!ownerUid) throw new Error('Joy not found');
+    const depositRef = push(ref(db, `users/${ownerUid}/joys/${joyId}/deposits`));
+    await set(depositRef, payload);
+    return { id: depositRef.key ?? crypto.randomUUID(), ...payload };
   }
 
   private toCategory(category: unknown): JoyCategory {

@@ -371,7 +371,7 @@ export class MainContentComponent implements OnInit {
   }
 
   private toApiCurrency(currency: AppCurrency): string {
-    return currency === "RM" ? "MYR" : currency;
+    return currency; // AppCurrency now uses 'MYR' directly
   }
 
   getLanguageButtonClasses(language: AppLanguage): string {

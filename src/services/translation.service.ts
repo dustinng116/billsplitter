@@ -272,7 +272,22 @@ const EN_DICTIONARY: TranslationDictionary = {
   'category.work': 'Work',
   'category.family': 'Family',
   'category.sport': 'Sport',
-  'category.other': 'Other'
+  'category.other': 'Other',
+
+  'deposit.addDeposit': 'Add Deposit',
+  'deposit.member': 'Member',
+  'deposit.amount': 'Amount',
+  'deposit.currency': 'Currency',
+  'deposit.totalDeposited': 'Total Deposited',
+  'deposit.noExpenses': 'No expenses yet.',
+  'deposit.depositRecords': 'Deposit Records',
+  'deposit.noRecords': 'No deposit records yet.',
+  'deposit.paidViaDeposit': 'Paid via Deposit',
+  'deposit.save': 'Save',
+  'deposit.cancel': 'Cancel',
+  'deposit.title': 'Add Deposit',
+  'deposit.selectMember': 'Select member',
+  'deposit.enterAmount': 'Enter amount'
 };
 
 const VN_DICTIONARY: TranslationDictionary = {
@@ -541,7 +556,22 @@ const VN_DICTIONARY: TranslationDictionary = {
   'category.work': 'Công việc',
   'category.family': 'Gia đình',
   'category.sport': 'Thể thao',
-  'category.other': 'Khác'
+  'category.other': 'Khác',
+
+  'deposit.addDeposit': 'Thêm Deposit',
+  'deposit.member': 'Thành viên',
+  'deposit.amount': 'Số tiền',
+  'deposit.currency': 'Tiền tệ',
+  'deposit.totalDeposited': 'Tổng đã Deposit',
+  'deposit.noExpenses': 'Chưa có chi tiêu.',
+  'deposit.depositRecords': 'Lịch sử Deposit',
+  'deposit.noRecords': 'Chưa có lịch sử Deposit.',
+  'deposit.paidViaDeposit': 'Thanh toán qua Deposit',
+  'deposit.save': 'Lưu',
+  'deposit.cancel': 'Huỷ',
+  'deposit.title': 'Thêm Deposit',
+  'deposit.selectMember': 'Chọn thành viên',
+  'deposit.enterAmount': 'Nhập số tiền'
 };
 
 @Injectable({ providedIn: 'root' })
