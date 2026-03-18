@@ -1,4 +1,4 @@
-<div class="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
+<div class="md:bg-white md:dark:bg-slate-900 md:border md:border-slate-200 md:dark:border-slate-800 md:shadow-sm rounded-xl overflow-hidden">
       <div *ngIf="isLoading" class="flex min-h-[280px] flex-col items-center justify-center gap-3 px-6 py-12 text-center">
         <span class="material-symbols-outlined animate-spin text-3xl text-primary">progress_activity</span>
         <p class="text-sm font-semibold text-slate-500 dark:text-slate-400">{{ loadingText }}</p>
@@ -12,7 +12,7 @@
 
       <div class="block lg:hidden">
         <ng-container *ngIf="mobileRowDef?.template; else mobileTableFallback">
-          <div [ngClass]="{'p-4 space-y-3': data.length > 10, 'p-0 space-y-3': data.length <= 10}">
+          <div [ngClass]="{'p-4 space-y-2': data.length > 10, 'p-0 space-y-2': data.length <= 10}">
             <ng-container *ngFor="let row of data; index as i; trackBy: trackByData">
               <ng-container
                 [ngTemplateOutlet]="mobileRowDef!.template"

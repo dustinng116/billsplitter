@@ -284,7 +284,7 @@
         </div>
 
         <div
-          class="space-y-4 max-h-[420px] overflow-y-auto pr-0.5"
+          class="space-y-2 max-h-[420px] overflow-y-auto pr-0.5"
           *ngIf="groupCards.length > 0"
         >
           <div
@@ -496,7 +496,7 @@
           >
             <div
               *ngFor="let item of splitBillSummaries"
-              class="relative block rounded-xl border border-slate-100 bg-slate-50 p-3 dark:border-slate-800 dark:bg-slate-950/50 md:rounded-none md:border-0 md:bg-transparent md:p-4 md:border-b md:border-slate-50 md:dark:border-slate-800/50 transition-colors"
+              class="relative block rounded-xl border border-slate-100 bg-slate-50 p-3 dark:border-slate-800 dark:bg-slate-950/50 md:rounded-none md:border-0 md:bg-transparent md:border-b md:border-slate-50 md:dark:border-slate-800/50 transition-colors"
             >
               <div class="flex items-start gap-3">
                 <div
@@ -554,7 +554,7 @@
               </div>
                  
                   <!-- View details — mobile: full-width button below -->
-                  <div class="mt-2 md:hidden">
+                  <div class="md:hidden">
                     <p
                         class="text-sm font-bold text-slate-900 dark:text-white shrink-0 flex justify-end"
                         [class.line-through]="item.isPaid"
