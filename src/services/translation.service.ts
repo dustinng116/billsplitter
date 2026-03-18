@@ -235,6 +235,7 @@ const EN_DICTIONARY: TranslationDictionary = {
   'common.signInWithGoogle': 'Sign in with Google',
   'common.syncGuestData': 'Sync guest data',
   'common.syncing': 'Syncing...',
+  'common.save': 'Save',
   'common.avatar': 'avatar',
   'common.uploadError': 'Failed to upload image. Please try again.',
   'common.signInFailed': 'Sign in failed. Please try again.',
