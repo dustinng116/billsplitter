@@ -81,6 +81,16 @@ export interface JoyChecklistItem {
   createdAt: string;
 }
 
+export interface JoyDepositEntry {
+  id: string;
+  memberId: string;
+  memberName: string;
+  memberEmail: string;
+  currency: string;
+  amount: number;
+  createdAt: string;
+}
+
 export interface CategoryStyle {
   bgColor: string;
   textColor: string;

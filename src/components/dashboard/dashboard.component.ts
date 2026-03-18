@@ -30,6 +30,7 @@ import {
   Joy,
   JoyCategory,
   JoyChecklistItem,
+  JoyDepositEntry,
   JoyGroup,
   JoyGroupMember,
   JoyExpense,
@@ -50,6 +51,34 @@ interface SpenderSummary {
   name: string;
   totalSpent: number;
   totalEarned: number;
+  isDeposit?: boolean;
+  depositCurrency?: string;
+  depositTotal?: number;
+  depositRemaining?: number;
+}
+
+interface DepositDialogRow {
+  memberId: string;
+  memberName: string;
+  memberEmail: string;
+  currency: AppCurrency;
+  amount: number | null;
+}
+
+interface SpenderDialogData {
+  spenderKey: string;
+  name: string;
+  isDeposit: boolean;
+  depositCurrency?: string;
+  depositTotal?: number;
+  depositRecords?: { memberName: string; amount: number; currency: string; date: string }[];
+  expenses: {
+    title: string;
+    originalAmount: number;
+    convertedAmount: number;
+    currency: string;
+    isPaid: boolean;
+  }[];
 }
 
 interface JoyConfigForm {
@@ -88,6 +117,10 @@ export class DashboardComponent implements OnChanges, OnDestroy {
   deleteGroupDialog!: TemplateRef<unknown>;
   @ViewChild('memberDetailsDialog', { static: true })
   memberDetailsDialog!: TemplateRef<unknown>;
+  @ViewChild('depositDialogContent', { static: true })
+  depositDialogContent!: TemplateRef<unknown>;
+  @ViewChild('spenderDialogContent', { static: true })
+  spenderDialogContent!: TemplateRef<unknown>;
 
   selectedJoy: Joy | null = null;
   groupCards: JoyGroup[] = [];
@@ -149,6 +182,14 @@ export class DashboardComponent implements OnChanges, OnDestroy {
   expMemberPaidState = new Map<string, boolean>();
   currentDialogMemberKey = '';
 
+  // Deposit state
+  depositEntries: JoyDepositEntry[] = [];
+  private unsubscribeDeposits: Unsubscribe | null = null;
+  depositDialogRows: DepositDialogRow[] = [];
+  isSavingDeposit = false;
+  spenderDialogData: SpenderDialogData | null = null;
+  readonly supportedCurrencies: AppCurrency[];
+
   private readonly userSubscription: Subscription;
   private lastSessionKey = '__uninitialized__';
   private loadVersion = 0;
@@ -165,6 +206,7 @@ export class DashboardComponent implements OnChanges, OnDestroy {
     private readonly ngZone: NgZone,
     private readonly cdr: ChangeDetectorRef
   ) {
+    this.supportedCurrencies = this.currencyService.supportedCurrencies;
     this.userSubscription = this.userSessionService.user$.subscribe((user) => {
       this.currentUserEmail = user?.email?.trim().toLowerCase() ?? "";
       const nextSessionKey = user?.uid ?? 'guest';
@@ -206,8 +248,8 @@ export class DashboardComponent implements OnChanges, OnDestroy {
     return this.memberDetailsOpen.get(key) ?? false;
   }
 
-  getMemberExpenses(key: string): Array<{ expenseId: string; groupId: string; groupName: string; expenseTitle: string; originalAmount: number; originalCurrency: AppCurrency; convertedAmount: number }> {
-    const results: Array<{ expenseId: string; groupId: string; groupName: string; expenseTitle: string; originalAmount: number; originalCurrency: AppCurrency; convertedAmount: number }> = [];
+  getMemberExpenses(key: string): Array<{ expenseId: string; groupId: string; groupName: string; expenseTitle: string; originalAmount: number; originalCurrency: AppCurrency; convertedAmount: number; isDeposit: boolean }> {
+    const results: Array<{ expenseId: string; groupId: string; groupName: string; expenseTitle: string; originalAmount: number; originalCurrency: AppCurrency; convertedAmount: number; isDeposit: boolean }> = [];
 
     const searchRaw = (key || '').toString();
     const search = searchRaw.trim().toLowerCase();
@@ -258,6 +300,7 @@ export class DashboardComponent implements OnChanges, OnDestroy {
             originalAmount,
             originalCurrency: srcCurrency,
             convertedAmount,
+            isDeposit: !!(exp.paidBy?.startsWith('DEPOSIT:')),
           });
         }
       }
@@ -280,6 +323,11 @@ export class DashboardComponent implements OnChanges, OnDestroy {
       const realExpId = e.expenseId.substring(sepIdx + 2);
       const expMembers = this.groupExpensesMap.get(groupId)?.find(ex => ex.id === realExpId)?.members ?? [];
       const memberKeyNorm = item.key.trim().toLowerCase();
+      // Deposit expenses are always paid — no tracking needed
+      if (e.isDeposit) {
+        this.dialogExpensePaidState.set(e.expenseId, true);
+        continue;
+      }
       // Find the matching expense member and use ITS canonical key for expMemberPaidState lookup
       let isPaid = false;
       for (const em of expMembers) {
@@ -372,8 +420,13 @@ export class DashboardComponent implements OnChanges, OnDestroy {
     // Sync outer member isPaid without cascading back down to expenses.
     // All checked → mark outer as paid; any unchecked → mark outer as unpaid.
     const allExpenses = this.getMemberExpenses(memberKey);
-    const allChecked = allExpenses.length > 0 &&
-      allExpenses.every(e => this.dialogExpensePaidState.get(e.expenseId) ?? false);
+    // Deposit expenses are always paid; only non-deposit ones must all be checked.
+    const nonDepositExpenses = allExpenses.filter(e => !e.isDeposit);
+    const allChecked = allExpenses.length > 0 && (
+      nonDepositExpenses.length === 0
+        ? true
+        : nonDepositExpenses.every(e => this.dialogExpensePaidState.get(e.expenseId) ?? false)
+    );
 
     // Update the visual cross-line on the split-bill row and persist to groups
     // but do NOT cascade "syncExpenseLevelPaidStateForMember" again.
@@ -393,13 +446,14 @@ export class DashboardComponent implements OnChanges, OnDestroy {
 
   get dialogTotalPaid(): number {
     return this.getMemberExpenses(this.currentDialogMemberKey)
-      .filter(e => this.dialogExpensePaidState.get(e.expenseId) ?? false)
+      .filter(e => e.isDeposit || (this.dialogExpensePaidState.get(e.expenseId) ?? false))
       .reduce((sum, e) => sum + e.convertedAmount, 0);
   }
 
   get dialogHasAnyPaid(): boolean {
-    for (const v of this.dialogExpensePaidState.values()) {
-      if (v) return true;
+    for (const e of this.getMemberExpenses(this.currentDialogMemberKey)) {
+      if (e.isDeposit) return true;
+      if (this.dialogExpensePaidState.get(e.expenseId) ?? false) return true;
     }
     return false;
   }
@@ -522,6 +576,7 @@ export class DashboardComponent implements OnChanges, OnDestroy {
     this.unsubscribeJoy?.();
     this.unsubscribeGroups?.();
     this.unsubscribeChecklist?.();
+    this.unsubscribeDeposits?.();
     this.userSubscription.unsubscribe();
     // cleanup expense listeners
     this.groupExpensesUnsubscribers.forEach((unsub) => unsub());
@@ -949,26 +1004,33 @@ export class DashboardComponent implements OnChanges, OnDestroy {
   }
 
   get spenderSummaries(): SpenderSummary[] {
-    const map = new Map<string, { name: string; totalSpent: number; totalEarned: number }>();
+    const regularMap = new Map<string, { name: string; totalSpent: number; totalEarned: number }>();
+    const depositExpMap = new Map<string, number>(); // currency → total spent from deposit
 
     for (const [groupId, expenses] of this.groupExpensesMap.entries()) {
       for (const exp of expenses) {
         const paidByRaw = (exp.paidBy || '').trim();
         if (!paidByRaw) continue;
-        const paidByKey = paidByRaw.toLowerCase();
 
         const srcCurrency = (exp.currency as AppCurrency) ?? this.currencyService.currentCurrency();
         const originalTotal = typeof exp.originalAmount === 'number' ? exp.originalAmount : exp.amount;
-        const systemTotal = this.currencyService.convertUsingRateHeuristic(originalTotal, srcCurrency);
 
-        if (!map.has(paidByKey)) {
-          map.set(paidByKey, { name: this.resolveSpenderName(paidByRaw), totalSpent: 0, totalEarned: 0 });
+        // Deposit-paid expenses go into the deposit map (in original currency)
+        if (paidByRaw.startsWith('DEPOSIT:')) {
+          const currency = paidByRaw.split(':')[1];
+          depositExpMap.set(currency, (depositExpMap.get(currency) ?? 0) + originalTotal);
+          continue;
         }
 
-        const entry = map.get(paidByKey)!;
+        const paidByKey = paidByRaw.toLowerCase();
+        const systemTotal = this.currencyService.convertUsingRateHeuristic(originalTotal, srcCurrency);
+
+        if (!regularMap.has(paidByKey)) {
+          regularMap.set(paidByKey, { name: this.resolveSpenderName(paidByRaw), totalSpent: 0, totalEarned: 0 });
+        }
+        const entry = regularMap.get(paidByKey)!;
         entry.totalSpent += systemTotal;
 
-        // Sum shareAmounts for members whose per-expense paid state is true
         for (const em of exp.members ?? []) {
           const emKey = this.getMemberKey(em);
           const persistKey = `${groupId}__${exp.id}__${emKey}`;
@@ -981,10 +1043,208 @@ export class DashboardComponent implements OnChanges, OnDestroy {
       }
     }
 
-    return Array.from(map.entries())
+    const regularSummaries: SpenderSummary[] = Array.from(regularMap.entries())
       .map(([key, v]) => ({ key, ...v }))
       .filter(s => s.totalSpent > 0)
       .sort((a, b) => b.totalSpent - a.totalSpent);
+
+    // Build deposit summaries — one per currency that has deposit entries
+    const depositTotals = new Map<string, number>();
+    for (const entry of this.depositEntries) {
+      depositTotals.set(entry.currency, (depositTotals.get(entry.currency) ?? 0) + entry.amount);
+    }
+    // Also include currencies that only have deposit expenses (but no deposit entries yet)
+    for (const currency of depositExpMap.keys()) {
+      if (!depositTotals.has(currency)) depositTotals.set(currency, 0);
+    }
+
+    const depositSummaries: SpenderSummary[] = Array.from(depositTotals.entries())
+      .map(([currency, total]) => {
+        const spent = depositExpMap.get(currency) ?? 0;
+        return {
+          key: `DEPOSIT:${currency}`,
+          name: `Deposit in ${currency}`,
+          totalSpent: spent,
+          totalEarned: 0,
+          isDeposit: true,
+          depositCurrency: currency,
+          depositTotal: total,
+          depositRemaining: total - spent,
+        };
+      })
+      .sort((a, b) => (a.depositCurrency ?? '').localeCompare(b.depositCurrency ?? ''));
+
+    return [...regularSummaries, ...depositSummaries];
+  }
+
+  // ── Deposit helpers ─────────────────────────────────────────────────────
+
+  get allJoyMembers(): JoyGroupMember[] {
+    const seen = new Set<string>();
+    const members: JoyGroupMember[] = [];
+    for (const group of this.groupCards) {
+      for (const member of group.members ?? []) {
+        const key = this.getMemberKey(member);
+        if (!seen.has(key)) {
+          seen.add(key);
+          members.push(member);
+        }
+      }
+    }
+    return members;
+  }
+
+  get depositChips(): { currency: string; total: number }[] {
+    const totals = new Map<string, number>();
+    for (const entry of this.depositEntries) {
+      totals.set(entry.currency, (totals.get(entry.currency) ?? 0) + entry.amount);
+    }
+    return Array.from(totals.entries()).map(([currency, total]) => ({ currency, total }));
+  }
+
+  get depositSummaries(): { currency: AppCurrency; total: number; remaining: number }[] {
+    const totals = new Map<string, number>();
+    for (const entry of this.depositEntries) {
+      totals.set(entry.currency, (totals.get(entry.currency) ?? 0) + entry.amount);
+    }
+    const used = new Map<string, number>();
+    for (const [, expenses] of this.groupExpensesMap.entries()) {
+      for (const exp of expenses) {
+        if (!exp.paidBy?.startsWith('DEPOSIT:')) continue;
+        const currency = exp.paidBy.split(':')[1];
+        const originalAmt = exp.originalAmount ?? exp.amount;
+        used.set(currency, (used.get(currency) ?? 0) + originalAmt);
+      }
+    }
+    return Array.from(totals.entries()).map(([currency, total]) => ({
+      currency: currency as AppCurrency,
+      total,
+      remaining: total - (used.get(currency) ?? 0),
+    }));
+  }
+
+  get depositDialogChipsList(): { currency: string; total: number }[] {
+    const totals = new Map<string, number>();
+    for (const row of this.depositDialogRows) {
+      if (!row.amount || row.amount <= 0) continue;
+      totals.set(row.currency, (totals.get(row.currency) ?? 0) + (row.amount ?? 0));
+    }
+    return Array.from(totals.entries()).map(([currency, total]) => ({ currency, total }));
+  }
+
+  openDepositDialog(): void {
+    if (!this.depositDialogContent) return;
+    // Build rows from all unique members across all groups; default currency = system currency
+    const defaultCurrency = this.currencyService.currentCurrency();
+    this.depositDialogRows = this.allJoyMembers.map(m => ({
+      memberId: m.id,
+      memberName: m.name,
+      memberEmail: m.email,
+      currency: defaultCurrency,
+      amount: null,
+    }));
+    this.isSavingDeposit = false;
+
+    const saveLabel = this.translationService.t('common.save') || 'Save';
+    const cancelLabel = this.translationService.t('friends.cancel') || 'Cancel';
+    this.commonDialogService.open({
+      title: 'Add Deposit',
+      icon: 'savings',
+      content: this.depositDialogContent,
+      bodyClass: 'p-0',
+      actions: [
+        { label: cancelLabel, kind: 'secondary', handler: () => this.commonDialogService.close() },
+        { label: saveLabel, kind: 'primary', handler: () => void this.saveDeposit() },
+      ],
+    });
+  }
+
+  async saveDeposit(): Promise<void> {
+    if (!this.joyId || this.isSavingDeposit) return;
+    const rows = this.depositDialogRows.filter(r => r.amount && r.amount > 0);
+    if (!rows.length) { this.commonDialogService.close(); return; }
+    this.isSavingDeposit = true;
+    try {
+      await Promise.all(rows.map(row =>
+        this.joyService.addJoyDepositEntry(this.joyId!, {
+          memberId: row.memberId,
+          memberName: row.memberName,
+          memberEmail: row.memberEmail,
+          currency: row.currency,
+          amount: row.amount!,
+        })
+      ));
+      this.commonDialogService.close();
+    } catch (err) {
+      console.error('Failed to save deposit', err);
+    } finally {
+      this.isSavingDeposit = false;
+      this.cdr.detectChanges();
+    }
+  }
+
+  openSpenderDialog(s: SpenderSummary, event?: Event): void {
+    event?.stopPropagation();
+    if (!this.spenderDialogContent) return;
+
+    if (s.isDeposit) {
+      const currency = s.depositCurrency!;
+      const depositExpenses: SpenderDialogData['expenses'] = [];
+      for (const [groupId, expenses] of this.groupExpensesMap.entries()) {
+        for (const exp of expenses) {
+          if (!exp.paidBy?.startsWith('DEPOSIT:')) continue;
+          const expCurrency = exp.paidBy.split(':')[1];
+          if (expCurrency !== currency) continue;
+          const originalAmt = exp.originalAmount ?? exp.amount;
+          const srcCurrency = (exp.currency as AppCurrency) ?? this.currencyService.currentCurrency();
+          const convertedAmt = this.currencyService.convertUsingRateHeuristic(originalAmt, srcCurrency);
+          const allMembersPaid = (exp.members ?? []).every(em => {
+            const emKey = this.getMemberKey(em);
+            const pKey = `${groupId}__${exp.id}__${emKey}`;
+            return this.expMemberPaidState.get(pKey) ?? !!(em.isPaid);
+          });
+          depositExpenses.push({ title: exp.title, originalAmount: originalAmt, convertedAmount: convertedAmt, currency: expCurrency, isPaid: allMembersPaid });
+        }
+      }
+      this.spenderDialogData = { spenderKey: s.key, name: s.name, isDeposit: true, depositCurrency: currency, depositTotal: s.depositTotal, depositRecords: this.depositEntries.filter(d => d.currency === currency).map(d => ({ memberName: d.memberName, amount: d.amount, currency: d.currency, date: d.createdAt })), expenses: depositExpenses };
+    } else {
+      const spenderExpenses: SpenderDialogData['expenses'] = [];
+      for (const [groupId, expenses] of this.groupExpensesMap.entries()) {
+        for (const exp of expenses) {
+          if (exp.paidBy?.startsWith('DEPOSIT:')) continue;
+          const paidByNorm = (exp.paidBy || '').trim().toLowerCase();
+          if (paidByNorm !== s.key && paidByNorm !== s.name.toLowerCase()) continue;
+          const srcCurrency = (exp.currency as AppCurrency) ?? this.currencyService.currentCurrency();
+          const originalAmt = exp.originalAmount ?? exp.amount;
+          const convertedAmt = this.currencyService.convertUsingRateHeuristic(originalAmt, srcCurrency);
+          const allMembersPaid = (exp.members ?? []).every(em => {
+            const emKey = this.getMemberKey(em);
+            const pKey = `${groupId}__${exp.id}__${emKey}`;
+            return this.expMemberPaidState.get(pKey) ?? !!(em.isPaid);
+          });
+          spenderExpenses.push({ title: exp.title, originalAmount: originalAmt, convertedAmount: convertedAmt, currency: exp.currency ?? srcCurrency, isPaid: allMembersPaid });
+        }
+      }
+      this.spenderDialogData = { spenderKey: s.key, name: s.name, isDeposit: false, expenses: spenderExpenses };
+    }
+
+    const closeLabel = this.translationService.t('friends.cancel') || 'Close';
+    this.commonDialogService.open({
+      title: s.name,
+      icon: s.isDeposit ? 'savings' : 'person',
+      content: this.spenderDialogContent,
+      bodyClass: 'p-0',
+      actions: [{ label: closeLabel, kind: 'primary', grow: true, handler: () => this.commonDialogService.close() }],
+      onClose: () => { this.spenderDialogData = null; this.cdr.detectChanges(); },
+    });
+  }
+
+  formatDepositAmount(amount: number, currency: string): string {
+    return this.currencyService.formatAmountInCurrency(amount, currency as AppCurrency);
+  }
+
+  trackByExpenseId(_index: number, e: { expenseId: string }): string {
+    return e.expenseId;
   }
 
   onEditGroup(group: JoyGroup, event: Event) {
@@ -1018,12 +1278,15 @@ export class DashboardComponent implements OnChanges, OnDestroy {
 
   isAllDialogExpensesPaid(key: string): boolean {
     const expenses = this.getMemberExpenses(key);
-    return expenses.length > 0 && expenses.every(e => this.dialogExpensePaidState.get(e.expenseId) ?? false);
+    const nonDeposit = expenses.filter(e => !e.isDeposit);
+    if (!nonDeposit.length) return expenses.some(e => e.isDeposit);
+    return nonDeposit.every(e => this.dialogExpensePaidState.get(e.expenseId) ?? false);
   }
 
   async toggleAllDialogExpensesPaid(key: string, event: Event): Promise<void> {
     const checked = (event.target as HTMLInputElement).checked;
-    const expenses = this.getMemberExpenses(key);
+    // Only toggle non-deposit expenses; deposits are always paid and disabled.
+    const expenses = this.getMemberExpenses(key).filter(e => !e.isDeposit);
     await Promise.all(
       expenses.map(e =>
         this.toggleDialogExpensePaid(key, e.expenseId, { target: { checked } } as unknown as Event)
@@ -1244,11 +1507,13 @@ export class DashboardComponent implements OnChanges, OnDestroy {
 
     this.unsubscribeJoy?.();
     this.unsubscribeGroups?.();
+    this.unsubscribeDeposits?.();
 
     if (!this.joyId) {
       this.lastLoadedJoyId = '';
       this.selectedJoy = null;
       this.groupCards = [];
+      this.depositEntries = [];
       this.expMemberPaidState.clear();
       this.dialogExpensePaidState.clear();
       this.cdr.detectChanges();
@@ -1257,6 +1522,7 @@ export class DashboardComponent implements OnChanges, OnDestroy {
 
     this.selectedJoy = null;
     this.groupCards = [];
+    this.depositEntries = [];
     this.expMemberPaidState.clear();
     this.dialogExpensePaidState.clear();
 
@@ -1349,6 +1615,21 @@ export class DashboardComponent implements OnChanges, OnDestroy {
       },
       (error) => {
         console.error('Failed to sync checklist.', error);
+      }
+    );
+
+    // Deposit subscription
+    this.unsubscribeDeposits?.();
+    this.unsubscribeDeposits = this.joyService.listenToJoyDepositEntries(
+      this.joyId,
+      (entries) => {
+        this.ngZone.run(() => {
+          this.depositEntries = entries;
+          this.cdr.detectChanges();
+        });
+      },
+      (error) => {
+        console.error('Failed to sync deposits.', error);
       }
     );
   }

@@ -26,7 +26,7 @@
                 />
                 <select
                   [(ngModel)]="expenseForm.currency"
-                  [disabled]="isDetailsMode"
+                  [disabled]="isDetailsMode || isCurrencyLocked"
                   (ngModelChange)="onExpenseCurrencyChange($event)"
                   class="shrink-0 border-l border-slate-200 bg-white px-3 py-3 text-sm font-semibold outline-none disabled:opacity-70 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
                 >
@@ -71,8 +71,13 @@
             <label class="text-sm font-semibold text-slate-700 dark:text-slate-300">{{ 'addExpense.paidBy' | translate }}</label>
             <div *ngIf="isMobileViewport; else desktopPaidByPicker" class="relative">
               <span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-xl">person</span>
-              <select [(ngModel)]="expenseForm.paidBy" [disabled]="isDetailsMode || isLoadingMembers || !expenseForm.members.length" class="w-full appearance-none rounded-xl border-transparent bg-slate-50 py-3 pl-12 pr-10 outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:opacity-70 dark:bg-slate-800 dark:text-slate-100">
+              <select [(ngModel)]="expenseForm.paidBy" [disabled]="isDetailsMode || isLoadingMembers || !expenseForm.members.length" class="w-full appearance-none rounded-xl border-transparent bg-slate-50 py-3 pl-12 pr-10 outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:opacity-70 dark:bg-slate-800 dark:text-slate-100"
+                (ngModelChange)="selectPaidBy($event)">
                 <option *ngFor="let member of expenseForm.members" [value]="member.name">{{ member.name }}</option>
+                <!-- Deposit options -->
+                <optgroup *ngIf="depositPaidByOptions.length" label="Deposit">
+                  <option *ngFor="let dep of depositPaidByOptions" [value]="dep.value">{{ dep.label }}</option>
+                </optgroup>
               </select>
               <span class="material-symbols-outlined absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">expand_more</span>
             </div>
@@ -96,8 +101,14 @@
                       <span class="truncate">{{ selectedPayer.name }}</span>
                     </ng-container>
                     <ng-template #noPaidBySelected>
-                      <span class="material-symbols-outlined text-lg text-slate-400">person</span>
-                      <span class="truncate">{{ getPaidByDisplayLabel() }}</span>
+                      <ng-container *ngIf="isDepositPaidBy; else realNoPaidBySelected">
+                        <span class="material-symbols-outlined text-lg text-emerald-500">savings</span>
+                        <span class="truncate text-emerald-700 dark:text-emerald-400">{{ getPaidByDisplayLabel() }}</span>
+                      </ng-container>
+                      <ng-template #realNoPaidBySelected>
+                        <span class="material-symbols-outlined text-lg text-slate-400">person</span>
+                        <span class="truncate">{{ getPaidByDisplayLabel() }}</span>
+                      </ng-template>
                     </ng-template>
                   </span>
                   <span class="material-symbols-outlined text-slate-400 transition-transform" [class.rotate-180]="isPaidByMenuOpen">expand_more</span>
@@ -124,6 +135,24 @@
                     </span>
                     <span *ngIf="expenseForm.paidBy === member.name" class="material-symbols-outlined text-base text-primary">check</span>
                   </button>
+                  <!-- Deposit options -->
+                  <ng-container *ngIf="depositPaidByOptions.length">
+                    <div class="mx-2 my-1 border-t border-slate-100 dark:border-slate-700"></div>
+                    <button
+                      *ngFor="let dep of depositPaidByOptions"
+                      type="button"
+                      (click)="selectPaidBy(dep.value)"
+                      class="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm transition-colors hover:bg-emerald-50 dark:hover:bg-emerald-900/20"
+                    >
+                      <span class="inline-flex min-w-0 items-center gap-3">
+                        <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-900/30">
+                          <span class="material-symbols-outlined text-emerald-600 text-[16px]">savings</span>
+                        </div>
+                        <span class="truncate text-emerald-700 dark:text-emerald-400">{{ dep.label }}</span>
+                      </span>
+                      <span *ngIf="expenseForm.paidBy === dep.value" class="material-symbols-outlined text-base text-emerald-500">check</span>
+                    </button>
+                  </ng-container>
                 </div>
               </div>
             </ng-template>

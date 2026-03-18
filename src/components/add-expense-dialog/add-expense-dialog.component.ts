@@ -43,6 +43,7 @@ interface ExpenseForm {
 export class AddExpenseDialogComponent implements OnInit, OnChanges, OnDestroy {
   @Input() joyId = '';
   @Input() groupId = '';
+  @Input() depositSummaries: { currency: AppCurrency; total: number; remaining: number }[] = [];
   @Output() closeDialog = new EventEmitter<void>();
   @Output() expenseAdded = new EventEmitter<unknown>();
   @ViewChild('dialogContent', { static: true }) dialogContent!: TemplateRef<unknown>;
@@ -68,6 +69,38 @@ export class AddExpenseDialogComponent implements OnInit, OnChanges, OnDestroy {
 
   get selectedPaidByMember(): GroupMember | null {
     return this.expenseForm.members.find((member) => member.name === this.expenseForm.paidBy) ?? null;
+  }
+
+  get isDepositPaidBy(): boolean {
+    return this.expenseForm.paidBy.startsWith('DEPOSIT:');
+  }
+
+  get depositLockedCurrency(): AppCurrency | null {
+    if (!this.isDepositPaidBy) return null;
+    return this.expenseForm.paidBy.split(':')[1] as AppCurrency;
+  }
+
+  get isCurrencyLocked(): boolean {
+    return this.isDepositPaidBy && !this.isDetailsMode;
+  }
+
+  get depositPaidByOptions(): { value: string; label: string }[] {
+    return this.depositSummaries
+      .filter(d => d.total > 0)
+      .map(d => ({
+        value: `DEPOSIT:${d.currency}`,
+        label: `Deposit (${this.currencyService.formatAmountInCurrency(d.remaining, d.currency)} left)`,
+      }));
+  }
+
+  getPaidByDisplayLabelDeposit(): string {
+    if (!this.isDepositPaidBy) return '';
+    const currency = this.depositLockedCurrency;
+    if (!currency) return 'Deposit';
+    const summary = this.depositSummaries.find(d => d.currency === currency);
+    return summary
+      ? `Deposit (${this.currencyService.formatAmountInCurrency(summary.remaining, currency)} left)`
+      : `Deposit in ${currency}`;
   }
 
   get suggestedMembers(): GroupMember[] {
@@ -264,10 +297,18 @@ export class AddExpenseDialogComponent implements OnInit, OnChanges, OnDestroy {
 
   selectPaidBy(memberName: string): void {
     this.expenseForm.paidBy = memberName;
+    // If a deposit option is selected, auto-lock the currency
+    if (memberName.startsWith('DEPOSIT:')) {
+      const currency = memberName.split(':')[1] as AppCurrency;
+      if (currency && this.supportedCurrencies.includes(currency)) {
+        this.expenseForm.currency = currency;
+      }
+    }
     this.isPaidByMenuOpen = false;
   }
 
   getPaidByDisplayLabel(): string {
+    if (this.isDepositPaidBy) return this.getPaidByDisplayLabelDeposit();
     return this.expenseForm.paidBy || this.translationService.t('addExpense.selectPayer');
   }
 
@@ -309,6 +350,7 @@ export class AddExpenseDialogComponent implements OnInit, OnChanges, OnDestroy {
   }
 
   onExpenseCurrencyChange(currency: AppCurrency): void {
+    if (this.isCurrencyLocked) return; // don't allow currency change when deposit is payer
     this.expenseForm.currency = currency;
   }
 
@@ -390,7 +432,7 @@ export class AddExpenseDialogComponent implements OnInit, OnChanges, OnDestroy {
   }
 
   isFormValid(): boolean {
-    return !!(
+    return !!(      
       this.expenseForm.title.trim() &&
       this.expenseForm.amount > 0 &&
       this.expenseForm.date &&
