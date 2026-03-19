@@ -70,12 +70,12 @@ export class CommonTableComponent<T = unknown> {
 
   @Input() tableClass = 'w-full text-left border-collapse';
   @Input() headerRowClass =
-    'bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-800';
+    'fb-table-header bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-800';
   @Input() headerCellClass =
     'px-6 py-4 text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400';
   @Input() cellBaseClass = 'px-6 py-4';
   @Input() rowClass =
-    'table-row-hover hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-all group cursor-pointer';
+    'fb-table-row table-row-hover hover:bg-slate-50 dark:hover:bg-slate-800 transition-all group cursor-pointer';
   @Input() emptyText = 'No data';
 
   @Input() showFooter = true;

@@ -105,6 +105,7 @@ const MOBILE_SWIPE_ACTION_WIDTH = 88;
 })
 export class DashboardComponent implements OnChanges, OnDestroy {
   @Input() joyId = "";
+  @Input() searchQuery = '';
   @Output() groupClicked = new EventEmitter<string>();
   @Output() newGroupClicked = new EventEmitter<string>();
   @Output() editGroupClicked = new EventEmitter<JoyGroup>();
@@ -233,6 +234,21 @@ export class DashboardComponent implements OnChanges, OnDestroy {
       }
     }
     return total;
+  }
+
+  get filteredGroupCards(): JoyGroup[] {
+    const q = this.searchQuery.trim().toLowerCase();
+    if (!q) return this.groupCards;
+
+    return this.groupCards.filter((group) => {
+      const name = (group.name || '').toLowerCase();
+      const memberHit = (group.members || []).some((m) => {
+        const n = (m.name || '').toLowerCase();
+        const e = (m.email || '').toLowerCase();
+        return n.includes(q) || e.includes(q);
+      });
+      return name.includes(q) || memberHit;
+    });
   }
 
   // Tracks which member detail panels are open
@@ -1094,13 +1110,10 @@ export class DashboardComponent implements OnChanges, OnDestroy {
     return members;
   }
 
-  get depositChips(): { currency: string; total: number }[] {
-    const totals = new Map<string, number>();
-    for (const entry of this.depositEntries) {
-      totals.set(entry.currency, (totals.get(entry.currency) ?? 0) + entry.amount);
-    }
-    return Array.from(totals.entries()).map(([currency, total]) => ({ currency, total }));
-  }
+  // Deprecated: use depositSummaries for chips
+  // get depositChips(): { currency: string; total: number }[] {
+  //   ...
+  // }
 
   get depositSummaries(): { currency: AppCurrency; total: number; remaining: number }[] {
     const totals = new Map<string, number>();
@@ -1149,7 +1162,7 @@ export class DashboardComponent implements OnChanges, OnDestroy {
     const cancelLabel = this.translationService.t('friends.cancel') || 'Cancel';
     this.commonDialogService.open({
       title: 'Add Deposit',
-      icon: 'savings',
+      icon: 'attach_money',
       content: this.depositDialogContent,
       bodyClass: 'p-0',
       actions: [
@@ -1231,7 +1244,7 @@ export class DashboardComponent implements OnChanges, OnDestroy {
     const closeLabel = this.translationService.t('friends.cancel') || 'Close';
     this.commonDialogService.open({
       title: s.name,
-      icon: s.isDeposit ? 'savings' : 'person',
+      icon: s.isDeposit ? 'attach_money' : 'person',
       content: this.spenderDialogContent,
       bodyClass: 'p-0',
       actions: [{ label: closeLabel, kind: 'primary', grow: true, handler: () => this.commonDialogService.close() }],
@@ -1679,6 +1692,25 @@ export class DashboardComponent implements OnChanges, OnDestroy {
       this.groupExpensesUnsubscribers.set(group.id, unsub);
     });
   }
+
+  // Returns color classes for each currency chip, and red border if negative
+  getCurrencyChipClass(currency: AppCurrency, negative: boolean = false): string {
+    const base = 'inline-flex items-center gap-1 rounded-xl px-2 py-1 text-xs font-bold backdrop-blur-md';
+    const colorMap: Record<AppCurrency, string> = {
+      USD: 'bg-sky-100 text-sky-800',
+      VND: 'bg-green-100 text-green-800',
+      SGD: 'bg-yellow-100 text-yellow-800',
+      MYR: 'bg-purple-100 text-purple-800',
+    };
+    const border = negative ? 'border border-red-500' : 'border border-transparent';
+    return `${base} ${colorMap[currency] || 'bg-slate-100 text-slate-800'} ${border}`;
+  }
+
+  // Returns icon name for negative chips
+  getCurrencyChipIcon(negative: boolean = false): string {
+    return negative ? 'error' : '';
+  }
+
   getInitials(name: string): string {
     return name?.trim() ? name.trim().charAt(0).toUpperCase() : '?';
   }

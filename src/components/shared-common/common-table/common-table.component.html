@@ -1,4 +1,4 @@
-<div class="md:bg-white md:dark:bg-slate-900 md:border md:border-slate-200 md:dark:border-slate-800 md:shadow-sm rounded-xl overflow-hidden">
+<div class="fb-table-shell md:bg-white md:dark:bg-slate-900 md:border md:border-slate-200 md:dark:border-slate-800 md:shadow-sm rounded-xl overflow-hidden">
       <div *ngIf="isLoading" class="flex min-h-[280px] flex-col items-center justify-center gap-3 px-6 py-12 text-center">
         <span class="material-symbols-outlined animate-spin text-3xl text-primary">progress_activity</span>
         <p class="text-sm font-semibold text-slate-500 dark:text-slate-400">{{ loadingText }}</p>
@@ -35,7 +35,7 @@
       </div>
 
       <!-- Pagination/footer: desktop always, mobile only if >10 items -->
-      <div *ngIf="showFooter && (isDesktop() || data.length > 10)" class="px-6 py-4 border-t border-slate-100 dark:border-slate-800">
+      <div *ngIf="showFooter && (isDesktop() || data.length > 10)" class="fb-table-footer px-6 py-4 border-t border-slate-100 dark:border-slate-800">
         <div class="flex justify-end">
           <ng-content select="[pagination]"></ng-content>
         </div>
@@ -56,7 +56,7 @@
           </tr>
         </thead>
 
-        <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+        <tbody class="fb-table-body divide-y divide-slate-100 dark:divide-slate-800">
           <tr
             *ngFor="let row of data; index as i; trackBy: trackByData"
             [class]="rowClass"

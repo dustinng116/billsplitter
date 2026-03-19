@@ -54,7 +54,7 @@ export class CommonDialogComponent {
 
     const variantClasses: Record<string, string> = {
       primary: 'bg-primary text-white shadow-lg shadow-primary/20 hover:bg-primary/90 disabled:bg-slate-300 disabled:cursor-not-allowed',
-      secondary: 'bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700',
+      secondary: 'bg-slate-100 text-slate-700 border border-slate-200 hover:bg-slate-200 dark:bg-[#3a3b3c] dark:text-[#e4e6eb] dark:border-[#4a4b4d] dark:hover:bg-[#4a4b4d]',
       danger: 'bg-red-600 text-white hover:bg-red-700 disabled:bg-slate-300 disabled:cursor-not-allowed'
     };
 

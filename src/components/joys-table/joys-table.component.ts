@@ -1,4 +1,4 @@
-import { ChangeDetectorRef, Component, EventEmitter, NgZone, OnDestroy, OnInit, Output, TemplateRef, ViewChild } from '@angular/core';
+import { ChangeDetectorRef, Component, EventEmitter, Input, NgZone, OnDestroy, OnInit, OnChanges, Output, SimpleChanges, TemplateRef, ViewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { type Unsubscribe } from 'firebase/database';
@@ -48,7 +48,8 @@ interface JoyForm {
   ],
   templateUrl: './joys-table.component.html'
 })
-export class JoysTableComponent implements OnInit, OnDestroy {
+export class JoysTableComponent implements OnInit, OnDestroy, OnChanges {
+  @Input() searchQuery = '';
   @Output() joyRowClicked = new EventEmitter<Joy>();
   @ViewChild('createJoyDialog', { static: true }) createJoyDialog!: TemplateRef<unknown>;
 
@@ -189,8 +190,27 @@ export class JoysTableComponent implements OnInit, OnDestroy {
   }
 
   get pagedJoys(): Joy[] {
+    const filtered = this.filteredJoys;
     const start = (this.currentPage - 1) * this.pageSize;
-    return this.joys.slice(start, start + this.pageSize);
+    return filtered.slice(start, start + this.pageSize);
+  }
+
+  get filteredJoys(): Joy[] {
+    const q = this.searchQuery.trim().toLowerCase();
+    if (!q) return this.joys;
+    return this.joys.filter((joy) => {
+      const joyName = (joy.joyName || '').toLowerCase();
+      const category = (joy.category || '').toLowerCase();
+      const date = (joy.date || '').toLowerCase();
+      return joyName.includes(q) || category.includes(q) || date.includes(q);
+    });
+  }
+
+  ngOnChanges(changes: SimpleChanges): void {
+    if (changes['searchQuery']) {
+      this.currentPage = 1;
+      this.ensureValidPage();
+    }
   }
 
   onPageChange(page: number): void {
@@ -358,7 +378,7 @@ export class JoysTableComponent implements OnInit, OnDestroy {
   }
 
   private ensureValidPage(): void {
-    const totalPages = Math.max(1, Math.ceil(this.joys.length / this.pageSize));
+    const totalPages = Math.max(1, Math.ceil(this.filteredJoys.length / this.pageSize));
     if (this.currentPage > totalPages) this.currentPage = totalPages;
   }
   getAvatarColorClasses(name: string): string {
