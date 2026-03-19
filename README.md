@@ -1,39 +1,111 @@
 # Joys Splitter
 
-Joys Splitter helps friends split the fun — and the bills — without the fuss. Think of it as your group's tiny accountant that only remembers the good times.
+Split shared expenses without killing the mood.
 
-Why people like it:
+Joys Splitter is a simple app for trips, dinners, rent, events, and everyday group spending. It helps everyone see who paid, who owes, what is still left, and what happened along the way, without turning the experience into spreadsheet work.
 
-- Fast to add expenses — no messy spreadsheets
-- Flexible splits: equal, percentage, or custom
-- Works on phone and desktop so everyone can keep up
-- Keeps a simple timeline of what happened
+## Why People Use It
 
-How you might use it (in plain words):
+- ✨ Clean and friendly experience on both phone and desktop
+- 💸 Fast expense tracking for shared moments
+- 👥 Easy group-based splitting with clear balances
+- 🌍 Multi-currency support when your group spends in different places
+- 🪙 Deposit tracking so you can see what is still left to use
+- 📜 Activity history to remember what changed and when
+- 🌙 Comfortable light and dark mode
 
-1. Create the event (a “Joy”) — e.g., Weekend Trip, Rent, Birthday
-2. Make a group inside that Joy for the people sharing costs
-3. Add expenses (who paid, how much, when)
-4. Choose how to split each bill and relax — totals are calculated for you
+## What You Can Do
 
-Quick examples:
+### 🎉 Create a Joy
+A Joy is the main event or purpose behind the spending.
 
-- Going on a trip? Create a Joy called "Road Trip" and one group per day/activity.
-- Roommates? Create a Joy for the month and groups for utilities, groceries, or rent.
-- Dinner out? Create a Dinner group, add the bill, and split however you like.
+Examples:
+- Weekend trip
+- Birthday party
+- Monthly apartment costs
+- Team dinner
 
-Design goals:
+### 👨‍👩‍👧 Add Groups Inside a Joy
+Break a big plan into smaller groups.
 
-- Friendly: clear labels and gentle language so non-technical people feel at home
-- Fast: add an expense in seconds
-- Honest: conversions and totals are shown clearly; original amounts are preserved
+Examples:
+- Transport
+- Hotel
+- Day 1 dinner
+- Groceries
 
-Privacy & sync:
+This keeps everything organized and easier to understand later.
 
-Your data is kept in your account (or locally if you use guest mode). The app syncs changes so friends see updates soon after they happen.
+### 🧾 Add Expenses in Seconds
+For each expense, you can record:
+- what it was
+- who paid
+- the amount
+- the date
+- how it should be split
 
-Want to test it now?
+Supported split styles include:
+- equal split
+- percentage split
+- custom split
 
-- Add a Joy, invite friends, add one expense, and try the split types — you’ll see who owes what instantly.
+### 🪙 Track Deposits
+If someone adds money to the shared pool first, you can track it as a deposit.
 
-Made for good times, not paperwork. ❤️
+That means you can quickly see:
+- how much was deposited
+- how much has already been used
+- how much is left
+- whether a deposit has gone negative
+
+### 🔎 Search Faster
+Use the top search bar to quickly find:
+- joys
+- groups
+
+This is especially useful when your list gets long.
+
+### 🧍 Continue as Guest or Sign In
+You can use the app casually, or sign in with Google for a more connected experience.
+
+Guest mode is useful when you want to try the app quickly.
+Signing in helps keep your data available across sessions.
+
+## A Simple Flow
+
+1. Start a Joy
+2. Add one or more groups
+3. Add members
+4. Record expenses or deposits
+5. Let the app calculate the balances
+6. Check activity history whenever you need context
+
+## Best For
+
+- 🧳 Travel groups
+- 🍽 Dinner with friends
+- 🏠 Roommates
+- 🎂 Events and celebrations
+- 🛒 Shared shopping
+- 💼 Small team spending
+
+## What Makes It Feel Good To Use
+
+- Friendly labels instead of finance-heavy language
+- Quick actions for common tasks
+- Mobile-first interactions for real-life use
+- Clear totals without clutter
+- A visual style that feels modern instead of formal
+
+## Good To Know
+
+- Original amounts are preserved when working with multiple currencies
+- Shared balances stay readable even when there are many expenses
+- Deposit chips help you see remaining pooled money at a glance
+- Search helps reduce scrolling when a Joy grows larger
+
+## In One Sentence
+
+Joys Splitter helps people enjoy shared moments first and sort out the money without stress.
+
+Made for good times, not paperwork.
