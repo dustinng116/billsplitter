@@ -30,7 +30,9 @@ import { AppRouteService, type AppView } from "./services/app-route.service";
   templateUrl: './app.component.html',
 })
 export class App {
+  private readonly sidebarStorageKey = 'ui.sidebar.collapsed';
   globalLoading = false;
+  searchQuery = '';
   currentRouteView: AppView = "joys-table";
   selectedJoyId = "";
   selectedGroupId = "";
@@ -62,6 +64,10 @@ export class App {
       this.selectedJoyId = state.selectedJoyId;
       this.selectedGroupId = state.selectedGroupId;
     });
+
+    if (typeof globalThis.window !== 'undefined' && globalThis.window.innerWidth >= 1024) {
+      this.sidebarCollapsed = this.readSidebarCollapsedState();
+    }
 
     if (typeof globalThis.window !== "undefined") {
       globalThis.window.addEventListener("touchstart", this.onTouchStart, { passive: true });
@@ -224,6 +230,32 @@ export class App {
       this.sidebarOverlay = !this.sidebarOverlay;
     } else {
       this.sidebarCollapsed = !this.sidebarCollapsed;
+      this.persistSidebarCollapsedState(this.sidebarCollapsed);
+    }
+  }
+
+  onSidebarCollapseToggle(collapsed: boolean): void {
+    this.sidebarCollapsed = collapsed;
+    this.persistSidebarCollapsedState(collapsed);
+  }
+
+  onSearchChanged(query: string): void {
+    this.searchQuery = query;
+  }
+
+  private readSidebarCollapsedState(): boolean {
+    try {
+      return localStorage.getItem(this.sidebarStorageKey) === '1';
+    } catch {
+      return false;
+    }
+  }
+
+  private persistSidebarCollapsedState(collapsed: boolean): void {
+    try {
+      localStorage.setItem(this.sidebarStorageKey, collapsed ? '1' : '0');
+    } catch {
+      // ignore storage errors
     }
   }
 

@@ -1,4 +1,4 @@
-import { Component, ElementRef, EventEmitter, NgZone, OnInit, Output, ViewChild } from "@angular/core";
+import { Component, ElementRef, EventEmitter, Input, NgZone, OnInit, Output, ViewChild } from "@angular/core";
 import { AvatarColorService } from "../../services/avatar-color.service";
 import { UserSessionService } from "../../services/user-session.service";
 import { Observable, Subscription } from "rxjs";
@@ -44,6 +44,7 @@ type ViewType =
   templateUrl: './main-content.component.html',
 })
 export class MainContentComponent implements OnInit {
+  @Input() searchQuery = '';
   @Output() newGroupClicked = new EventEmitter<string>();
   @Output() editGroupClicked = new EventEmitter<{ joyId: string; group: any }>();
   @Output() addFriendClicked = new EventEmitter<void>();
@@ -107,11 +108,7 @@ export class MainContentComponent implements OnInit {
   ) {
     this.supportedCurrencies = this.currencyService.supportedCurrencies;
     this.user$ = this.userSession.user$;
-    this.user$.subscribe((user) => {
-      if (user) {
-        console.log("Logged in user profile:", user);
-      }
-
+    this.user$.subscribe((user) => { 
       this.hasGuestData = !!user && this.guestSyncService.hasGuestData();
     });
 
@@ -282,7 +279,7 @@ export class MainContentComponent implements OnInit {
 
   setCurrency(currency: AppCurrency): void {
     this.currencyService.setCurrency(currency);
-    // Do NOT auto-fetch rates here — user must click refresh per row.
+    void this.syncLiveCurrencyRates(currency);
     void this.activityService.logActivity({
       type: "change-currency",
       title: "Changed currency",
@@ -433,4 +430,6 @@ export class MainContentComponent implements OnInit {
   ngOnDestroy(): void {
     this.routeSubscription.unsubscribe();
   }
+
+
 }

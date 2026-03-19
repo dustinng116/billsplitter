@@ -21,6 +21,7 @@
       <div *ngIf="currentView === 'dashboard'" class="w-full page-fade-in">
         <joys-dashboard
           [joyId]="selectedJoyId"
+          [searchQuery]="searchQuery"
           (groupClicked)="onGroupClicked($event)"
           (newGroupClicked)="onDashboardNewGroupClicked($event)"
           (editGroupClicked)="onEditGroupClicked($event)"
@@ -43,6 +44,7 @@
       <joys-joys-table
         *ngIf="currentView === 'joys-table'"
         class="page-fade-in"
+        [searchQuery]="searchQuery"
         (joyRowClicked)="onJoyRowClicked($event)"
       ></joys-joys-table>
 
@@ -190,7 +192,15 @@
                     | translate : { currency: currentCurrency() }
                 }}
               </div>
-
+              <div
+                *ngIf="isSyncingCurrencyRates"
+                class="inline-flex items-center gap-2 text-xs font-medium text-primary"
+              >
+                <span class="material-symbols-outlined animate-spin text-sm"
+                  >progress_activity</span
+                >
+                <span>{{ "account.currencyRateSyncing" | translate }}</span>
+              </div>
               <div
                 *ngFor="let currency of supportedCurrencies"
                 class="grid grid-cols-[80px_1fr_auto] items-center gap-3"

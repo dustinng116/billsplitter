@@ -21,6 +21,7 @@ import { ActivityService } from '../../services/activity.service';
 export class HeaderComponent implements OnInit, OnDestroy {
   @Output() createGroupClicked = new EventEmitter<void>();
   @Output() toggleSidebar = new EventEmitter<void>();
+  @Output() searchChanged = new EventEmitter<string>();
   @Input() sidebarCollapsed = false;
   searchValue = '';
   user: any = null;
@@ -129,6 +130,7 @@ export class HeaderComponent implements OnInit, OnDestroy {
   onSearchChange(event: Event) {
     const target = event.target as HTMLInputElement;
     this.searchValue = target.value;
+    this.searchChanged.emit(this.searchValue.trim());
   }
 
   onCreateGroupClick() {

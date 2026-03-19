@@ -1,11 +1,11 @@
 <div class="p-6 pt-4 lg:p-8 w-full">
-      <div class="flex flex-col gap-8 w-full">
+      <div class="flex flex-col gap-4 w-full">
 
         <!-- Header -->
-        <div class="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+        <div class="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
           <div class="flex flex-col gap-2">
             <h1 class="text-3xl font-black leading-tight tracking-tight text-slate-900 dark:text-white">{{ 'joys.title' | translate }}</h1>
-            <p class="max-w-lg text-base leading-relaxed text-slate-500 dark:text-slate-400">
+            <p class="max-w-lg text-base text-slate-500 dark:text-slate-400">
               {{ 'joys.subtitle' | translate }}
             </p>
           </div>
@@ -90,7 +90,7 @@
 
           <ng-template appMobileRowDef let-joy>
             <div
-              class="rounded-xl border border-slate-100 bg-white py-2 px-4 shadow-sm transition-all hover:border-primary/30 hover:shadow-md cursor-pointer dark:border-slate-800 dark:bg-slate-900"
+              class="rounded-xl border border-slate-100 bg-white py-2 px-4 shadow-sm transition-all hover:border-primary/30 hover:shadow-md cursor-pointer dark:border-slate-800 dark:bg-slate-900  shadow-lg shadow-primary/20"
               (click)="joyRowClicked.emit(joy)"
             >
               <div class="flex items-center justify-between gap-4">
@@ -139,7 +139,7 @@
             <joys-common-pagination
               [page]="currentPage"
               [pageSize]="pageSize"
-              [totalItems]="joys.length"
+              [totalItems]="filteredJoys.length"
               itemLabel="joys"
               (pageChange)="onPageChange($event)"
             ></joys-common-pagination>

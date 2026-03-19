@@ -57,11 +57,12 @@
               <!-- Deposit chips (mobile) - max 2 per row -->
               <div class="flex flex-wrap gap-1 justify-end" style="max-width: 200px">
                 <span
-                  *ngFor="let chip of depositChips"
-                  class="inline-flex items-center gap-1 rounded-xl bg-emerald-500/80 backdrop-blur-md px-2 py-1.5 text-[11px] font-bold text-white"
+                  *ngFor="let chip of depositSummaries"
+                  [ngClass]="getCurrencyChipClass(chip.currency, chip.remaining < 0)"
                   style="min-width: 0"
                 >
-                  {{ formatDepositAmount(chip.total, chip.currency) }}
+                  <span *ngIf="chip.remaining < 0" class="material-symbols-outlined text-red-500 text-[14px] mr-1">error</span>
+                  {{ formatDepositAmount(chip.remaining, chip.currency) }}
                 </span>
               </div>
               <!-- Add Deposit button (mobile) -->
@@ -72,7 +73,7 @@
                 class="inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/30 bg-emerald-600/50 text-white backdrop-blur-md transition-colors hover:bg-emerald-600/70"
                 aria-label="Add Deposit"
               >
-                <span class="material-symbols-outlined text-[18px]">savings</span>
+                <span class="material-symbols-outlined text-[18px]">attach_money</span>
               </button>
               <button
                 type="button"
@@ -141,16 +142,16 @@
             (click)="openDepositDialog()"
             class="flex items-center gap-2 rounded-xl bg-emerald-600/80 px-4 py-2 text-sm font-bold text-white backdrop-blur-md transition-colors hover:bg-emerald-600"
           >
-            <span class="material-symbols-outlined text-[18px]">savings</span>
+            <span class="material-symbols-outlined text-[18px]">attach_money</span>
             {{ 'deposit.addDeposit' | translate }}
           </button>
-          <!-- Deposit chips -->
+          <!-- Deposit chips with color and left amount -->
           <span
-            *ngFor="let chip of depositChips"
-            class="inline-flex items-center gap-1 rounded-xl bg-emerald-500/80 backdrop-blur-md px-3 py-2 text-xs font-bold text-white"
+            *ngFor="let chip of depositSummaries"
+            [ngClass]="getCurrencyChipClass(chip.currency, chip.remaining < 0)"
           >
-            <!-- <span class="material-symbols-outlined text-[14px]">savings</span> -->
-            {{ formatDepositAmount(chip.total, chip.currency) }}
+            <span *ngIf="chip.remaining < 0" class="material-symbols-outlined text-red-500 text-[16px] mr-1">error</span>
+            {{ formatDepositAmount(chip.remaining, chip.currency) }}
           </span>
           <button
             *ngIf="isCreator"
@@ -268,7 +269,7 @@
         </div>
 
         <div
-          *ngIf="!groupCards.length"
+          *ngIf="!filteredGroupCards.length"
           class="rounded-2xl border border-dashed border-slate-300 bg-white p-10 text-center dark:border-slate-700 dark:bg-slate-900"
         >
           <span
@@ -285,10 +286,10 @@
 
         <div
           class="space-y-2 max-h-[420px] overflow-y-auto pr-0.5"
-          *ngIf="groupCards.length > 0"
+          *ngIf="filteredGroupCards.length > 0"
         >
           <div
-            *ngFor="let group of groupCards"
+            *ngFor="let group of filteredGroupCards"
             class="relative overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm transition-all hover:border-primary/30"
           >
             <!-- Mobile Swipe Reveal Action -->
@@ -400,7 +401,7 @@
             <ng-container *ngIf="s.isDeposit; else desktopRegularSpender">
               <div class="flex items-center gap-3 min-w-0">
                 <div class="w-9 h-9 rounded-full flex items-center justify-center bg-emerald-100 dark:bg-emerald-900/30 shrink-0">
-                  <span class="material-symbols-outlined text-emerald-600 dark:text-emerald-400 text-[18px]">savings</span>
+                  <span class="material-symbols-outlined text-emerald-600 dark:text-emerald-400 text-[18px]">attach_money</span>
                 </div>
                 <p class="truncate text-sm font-semibold text-slate-900 dark:text-white">{{ s.name }}</p>
               </div>
@@ -604,7 +605,7 @@
             <ng-container *ngIf="s.isDeposit; else mobileRegularSpender">
               <div class="flex items-center gap-3 min-w-0 flex-1">
                 <div class="w-9 h-9 rounded-full flex items-center justify-center bg-emerald-100 dark:bg-emerald-900/30 shrink-0">
-                  <span class="material-symbols-outlined text-emerald-600 dark:text-emerald-400 text-[18px]">savings</span>
+                  <span class="material-symbols-outlined text-emerald-600 dark:text-emerald-400 text-[18px]">attach_money</span>
                 </div>
                 <p class="truncate text-sm font-semibold text-slate-900 dark:text-white">{{ s.name }}</p>
               </div>
@@ -1132,7 +1133,7 @@
         class="flex items-center justify-between gap-3 px-4 py-2.5 border-b border-slate-100 dark:border-slate-800/50 last:border-0"
       >
         <div class="flex items-center gap-2 min-w-0">
-          <span class="material-symbols-outlined text-[16px] text-emerald-500">savings</span>
+          <span class="material-symbols-outlined text-[16px] text-emerald-500">attach_money</span>
           <span class="text-sm text-slate-700 dark:text-slate-300 truncate">{{ dr.memberName }}</span>
         </div>
         <div class="flex items-center gap-2 shrink-0">

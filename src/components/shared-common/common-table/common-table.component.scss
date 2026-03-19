@@ -1,0 +1,21 @@
+:host-context(.dark) .fb-table-shell {
+	background-color: var(--surface-dark) !important;
+	border-color: var(--border-dark) !important;
+}
+
+:host-context(.dark) .fb-table-header {
+	background-color: var(--surface-dark) !important;
+	border-color: var(--border-dark) !important;
+}
+
+:host-context(.dark) .fb-table-row:hover {
+	background-color: #2f3031 !important;
+}
+
+:host-context(.dark) .fb-table-body {
+	border-color: var(--border-dark) !important;
+}
+
+:host-context(.dark) .fb-table-footer {
+	border-color: var(--border-dark) !important;
+}

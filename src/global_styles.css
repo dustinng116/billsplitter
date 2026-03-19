@@ -5,7 +5,11 @@
 :root {
   --primary: #135bec;
   --background-light: #f6f6f8;
-  --background-dark: #101622;
+  --background-dark: #18191a;
+  --surface-dark: #242526;
+  --border-dark: #3a3b3c;
+  --text-dark: #e4e6eb;
+  --text-dark-secondary: #b0b3b8;
 }
 html {
   overflow: hidden;
@@ -33,7 +37,136 @@ body {
 }
 
 .dark {
-  --background-light: #101622;
+  --background-light: #18191a;
+  --background-dark: #18191a;
+  --surface-dark: #242526;
+  --border-dark: #3a3b3c;
+  --text-dark: #e4e6eb;
+  --text-dark-secondary: #b0b3b8;
+  background-color: var(--background-dark);
+  color: var(--text-dark);
+}
+
+.dark .bg-white,
+.dark .bg-slate-900,
+.dark .bg-slate-800,
+.dark .bg-slate-950 {
+  background-color: var(--surface-dark) !important;
+}
+
+/* Global compatibility layer: map all old dark-slate utility classes to new dark tokens */
+.dark [class*="dark:bg-slate-"] {
+  background-color: var(--surface-dark) !important;
+}
+
+.dark [class*="dark:hover:bg-slate-"]:hover {
+  background-color: #2f3031 !important;
+}
+
+.dark [class*="dark:text-slate-50"],
+.dark [class*="dark:text-slate-100"],
+.dark [class*="dark:text-slate-200"],
+.dark [class*="dark:text-slate-300"],
+.dark [class*="dark:text-white"] {
+  color: var(--text-dark) !important;
+}
+
+.dark [class*="dark:text-slate-400"],
+.dark [class*="dark:text-slate-500"],
+.dark [class*="dark:text-slate-600"],
+.dark [class*="dark:text-slate-700"] {
+  color: var(--text-dark-secondary) !important;
+}
+
+.dark [class*="dark:border-slate-"] {
+  border-color: var(--border-dark) !important;
+}
+
+.dark [class*="dark:divide-slate-"] > :not([hidden]) ~ :not([hidden]) {
+  border-color: var(--border-dark) !important;
+}
+
+.dark [class*="dark:ring-slate-"] {
+  --tw-ring-color: var(--border-dark) !important;
+}
+
+/* Dark controls: ensure visible borders and readable contrast in dialogs/forms */
+.dark input:not([type='checkbox']):not([type='radio']):not([type='range']),
+.dark select,
+.dark textarea {
+  background-color: #3a3b3c !important;
+  border-color: #4a4b4d !important;
+  color: var(--text-dark) !important;
+}
+
+.dark input::placeholder,
+.dark textarea::placeholder {
+  color: var(--text-dark-secondary) !important;
+}
+
+.dark input:not([type='checkbox']):not([type='radio']):not([type='range']):focus,
+.dark select:focus,
+.dark textarea:focus {
+  border-color: #5b9dff !important;
+  box-shadow: 0 0 0 2px rgba(91, 157, 255, 0.25) !important;
+  outline: none;
+}
+
+.dark input:disabled,
+.dark select:disabled,
+.dark textarea:disabled {
+  background-color: #2f3031 !important;
+  border-color: #3f4042 !important;
+  color: var(--text-dark-secondary) !important;
+}
+
+.dark input[type='checkbox'],
+.dark input[type='radio'] {
+  background-color: #242526;
+  border-color: #5a5b5d;
+}
+
+.dark input[type='checkbox']:checked,
+.dark input[type='radio']:checked {
+  background-color: var(--primary);
+  border-color: var(--primary);
+}
+
+/* Neutral button treatment in dark mode (keeps primary/danger buttons intact) */
+.dark button[class*='bg-white'],
+.dark button[class*='bg-slate-'],
+.dark button[class*='border-slate-'] {
+  border-color: #4a4b4d !important;
+}
+
+.dark button[class*='bg-white'],
+.dark button[class*='bg-slate-']:not([class*='bg-primary']):not([class*='bg-red-']) {
+  background-color: #3a3b3c !important;
+  color: var(--text-dark) !important;
+}
+
+.dark button[class*='bg-white']:hover,
+.dark button[class*='bg-slate-']:not([class*='bg-primary']):not([class*='bg-red-']):hover {
+  background-color: #4a4b4d !important;
+}
+
+.dark .text-slate-900,
+.dark .text-slate-100,
+.dark .text-slate-200,
+.dark .text-white {
+  color: var(--text-dark) !important;
+}
+
+.dark .text-slate-400,
+.dark .text-slate-500,
+.dark .text-slate-600 {
+  color: var(--text-dark-secondary) !important;
+}
+
+.dark .border-slate-800,
+.dark .border-slate-700,
+.dark .border-slate-900 {
+  border-color: var(--border-dark) !important;
 }
 
 .material-symbols-outlined {
@@ -451,6 +584,9 @@ body {
 
 .dark .tw-date-picker {
   color-scheme: dark;
+  background-color: #3a3b3c !important;
+  border-color: #4a4b4d !important;
+  color: var(--text-dark) !important;
 }
 
 .tw-date-picker::-webkit-calendar-picker-indicator {
@@ -462,4 +598,9 @@ body {
 .tw-date-picker:hover::-webkit-calendar-picker-indicator,
 .tw-date-picker:focus-visible::-webkit-calendar-picker-indicator {
   opacity: 1;
+}
+
+.dark .tw-date-picker::-webkit-calendar-picker-indicator {
+  filter: invert(1) brightness(1.3);
+  opacity: 0.9;
 }

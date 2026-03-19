@@ -12,21 +12,18 @@ export class BillService {
   listenToBills(onBillsChanged: (bills: Bill[]) => void, onError: (error: unknown) => void): Unsubscribe {
     return onValue(
       this.billsReference,
-      (snapshot) => {
-        console.log('[BillService] snapshot received, exists:', snapshot.exists());
+      (snapshot) => { 
         if (!snapshot.exists()) {
           onBillsChanged([]);
           return;
         }
-        const billsData = snapshot.val() as Record<string, unknown>;
-        console.log('[BillService] raw data keys:', Object.keys(billsData));
+        const billsData = snapshot.val() as Record<string, unknown>; 
         const bills = Object.entries(billsData).map(([billId, billData]) =>
           this.mapBillDocument(billId, billData as Partial<Omit<Bill, 'id'>>)
         );
         onBillsChanged(bills);
       },
-      (error) => {
-        console.error('[BillService] Firebase listener error:', error);
+      (error) => { 
         onBillsChanged([]);
         onError(error);
       }

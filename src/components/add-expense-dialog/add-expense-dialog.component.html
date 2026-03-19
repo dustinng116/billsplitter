@@ -78,6 +78,7 @@
                 <optgroup *ngIf="depositPaidByOptions.length" label="Deposit">
                   <option *ngFor="let dep of depositPaidByOptions" [value]="dep.value">{{ dep.label }}</option>
                 </optgroup>
+                
               </select>
               <span class="material-symbols-outlined absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">expand_more</span>
             </div>
@@ -102,7 +103,7 @@
                     </ng-container>
                     <ng-template #noPaidBySelected>
                       <ng-container *ngIf="isDepositPaidBy; else realNoPaidBySelected">
-                        <span class="material-symbols-outlined text-lg text-emerald-500">savings</span>
+                        <span class="material-symbols-outlined text-lg text-emerald-500">attach_money</span>
                         <span class="truncate text-emerald-700 dark:text-emerald-400">{{ getPaidByDisplayLabel() }}</span>
                       </ng-container>
                       <ng-template #realNoPaidBySelected>
@@ -146,7 +147,7 @@
                     >
                       <span class="inline-flex min-w-0 items-center gap-3">
                         <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-900/30">
-                          <span class="material-symbols-outlined text-emerald-600 text-[16px]">savings</span>
+                          <span class="material-symbols-outlined text-emerald-600 text-[16px]">attach_money</span>
                         </div>
                         <span class="truncate text-emerald-700 dark:text-emerald-400">{{ dep.label }}</span>
                       </span>
