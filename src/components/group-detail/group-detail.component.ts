@@ -1,4 +1,4 @@
-import { ChangeDetectorRef, Component, EventEmitter, Input, NgZone, OnChanges, OnDestroy, Output, SimpleChanges, TemplateRef, ViewChild } from '@angular/core';
+import { AfterViewInit, ChangeDetectorRef, Component, ElementRef, EventEmitter, Input, NgZone, OnChanges, OnDestroy, Output, SimpleChanges, TemplateRef, ViewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { type Unsubscribe } from 'firebase/database';
 import { Subscription } from 'rxjs';
@@ -34,7 +34,7 @@ const MOBILE_SWIPE_ACTION_WIDTH = 88;
   imports: [CommonModule, AddExpenseDialogComponent, NewGroupDialogComponent, TranslatePipe],
   templateUrl: './group-detail.component.html'
 })
-export class GroupDetailComponent implements OnChanges, OnDestroy {
+export class GroupDetailComponent implements OnChanges, OnDestroy, AfterViewInit {
   @Output() dataLoaded = new EventEmitter<void>();
   @Input() joyId: string = '';
   @Input() groupId: string = '';
@@ -42,6 +42,10 @@ export class GroupDetailComponent implements OnChanges, OnDestroy {
   @ViewChild('addExpenseDialog') addExpenseDialog!: AddExpenseDialogComponent;
   @ViewChild('groupDetailsDialog') groupDetailsDialog!: NewGroupDialogComponent;
   @ViewChild('deleteExpenseDialog', { static: true }) deleteExpenseDialog!: TemplateRef<unknown>;
+  @ViewChild('mobileCoverRef') mobileCoverRef?: ElementRef<HTMLElement>;
+
+  showStickyMobileHeader = false;
+  private coverObserver: IntersectionObserver | null = null;
 
   isLoading = false;
   groupDetail: JoyGroup | null = null;
@@ -85,6 +89,10 @@ export class GroupDetailComponent implements OnChanges, OnDestroy {
     });
   }
 
+  ngAfterViewInit(): void {
+    this.startCoverObserver();
+  }
+
   ngOnChanges(changes: SimpleChanges): void {
     if (changes['joyId'] || changes['groupId']) {
       this.subscribeToGroupDetail();
@@ -100,11 +108,31 @@ export class GroupDetailComponent implements OnChanges, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.coverObserver?.disconnect();
     this.unsubscribeGroup?.();
     this.unsubscribeGroup = null;
     this.unsubscribeExpenses?.();
     this.unsubscribeExpenses = null;
     this.userSubscription.unsubscribe();
+  }
+
+  private startCoverObserver(): void {
+    this.coverObserver?.disconnect();
+    this.coverObserver = null;
+    const el = this.mobileCoverRef?.nativeElement;
+    if (!el) return;
+    this.coverObserver = new IntersectionObserver(
+      (entries) => {
+        const entry = entries[0];
+        if (!entry) return;
+        this.ngZone.run(() => {
+          this.showStickyMobileHeader = !entry.isIntersecting;
+          this.cdr.detectChanges();
+        });
+      },
+      { threshold: 0 }
+    );
+    this.coverObserver.observe(el);
   }
 
   onBack() {
@@ -438,6 +466,7 @@ export class GroupDetailComponent implements OnChanges, OnDestroy {
         this.isLoading = false;
         this.cdr.detectChanges();
         this.dataLoaded.emit();
+        this.startCoverObserver();
       }, remainingDelay);
     };
 

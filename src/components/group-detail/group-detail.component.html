@@ -1,6 +1,27 @@
 <div class="p-4 md:p-8 max-w-6xl mx-auto">
   <ng-container *ngIf="groupDetail as group">
-    <header class="md:hidden pb-4">
+    <!-- Sticky mobile header — appears once the cover scrolls out of view -->
+    <div
+      class="md:hidden fixed top-0 left-0 right-0 z-50 transition-all duration-300 pointer-events-none"
+      [class.pointer-events-auto]="showStickyMobileHeader"
+      [style.transform]="showStickyMobileHeader ? 'translateY(0)' : 'translateY(-100%)'"
+      [style.opacity]="showStickyMobileHeader ? '1' : '0'"
+    >
+      <div class="sticky-mobile-header-inner relative flex items-center px-3 py-2 backdrop-blur-xl bg-white/90 dark:bg-slate-900/90 border-b border-slate-200/60 dark:border-slate-800/60 shadow-sm">
+        <button
+          type="button"
+          (click)="onBack()"
+          class="flex-shrink-0 z-10 inline-flex h-9 w-9 items-center justify-center rounded-full text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+        >
+          <span class="material-symbols-outlined text-[20px]">arrow_back</span>
+        </button>
+        <h1 class="absolute inset-x-0 text-center text-sm font-bold text-slate-900 dark:text-white px-12 truncate pointer-events-none">
+          {{ group.name }}
+        </h1>
+      </div>
+    </div>
+
+    <header #mobileCoverRef class="md:hidden pb-4">
       <div class="relative min-h-[100px] overflow-hidden rounded-[28px] shadow-sm">
         <img
           [src]="hasImage(group.photo) ? group.photo : 'https://images.unsplash.com/photo-1525625293386-3f8f99389edd?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80'"
@@ -8,12 +29,6 @@
         <div class="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-slate-900/35 to-slate-900/10"></div>
 
         <input type="file" #fileUploadMobile class="hidden" accept="image/*" (change)="onPhotoSelected($event)" />
-        <!-- <button type="button" (click)="fileUploadMobile.click()"
-          class="absolute top-4 right-4 z-20 flex h-9 w-9 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur-md transition-colors hover:bg-black/60">
-          <span *ngIf="isUploadingPhoto"
-            class="material-symbols-outlined text-[18px] animate-spin">progress_activity</span>
-          <span *ngIf="!isUploadingPhoto" class="material-symbols-outlined text-[18px]">add_a_photo</span>
-        </button> -->
 
         <div class="relative z-10 flex min-h-[100px] flex-col justify-between p-4">
           <div class="flex items-center justify-between gap-3">
@@ -39,15 +54,6 @@
                 {{ formatDate(group.createdAt) }} • {{ getCategoryLabel(group.category) }}
               </p>
             </div>
-
-            <!-- <button
-                  type="button"
-                  (click)="openAddExpenseDialog()"
-                  class="inline-flex h-11 items-center justify-center gap-2 self-start rounded-xl border border-white/25 bg-white/15 px-4 text-sm font-bold text-white backdrop-blur-md transition-colors hover:bg-white/25"
-                >
-                  <span class="material-symbols-outlined text-[18px]">add_circle</span>
-                  <span>{{ 'groupDetail.addExpense' | translate }}</span>
-                </button> -->
           </div>
         </div>
       </div>

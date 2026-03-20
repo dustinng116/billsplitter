@@ -1,6 +1,8 @@
 import {
+  AfterViewInit,
   ChangeDetectorRef,
   Component,
+  ElementRef,
   EventEmitter,
   Input,
   NgZone,
@@ -103,7 +105,7 @@ const MOBILE_SWIPE_ACTION_WIDTH = 88;
   ],
   templateUrl: './dashboard.component.html',
 })
-export class DashboardComponent implements OnChanges, OnDestroy {
+export class DashboardComponent implements OnChanges, OnDestroy, AfterViewInit {
   @Input() joyId = "";
   @Input() searchQuery = '';
   @Output() groupClicked = new EventEmitter<string>();
@@ -120,8 +122,12 @@ export class DashboardComponent implements OnChanges, OnDestroy {
   memberDetailsDialog!: TemplateRef<unknown>;
   @ViewChild('depositDialogContent', { static: true })
   depositDialogContent!: TemplateRef<unknown>;
+  @ViewChild('mobileCoverRef') mobileCoverRef?: ElementRef<HTMLElement>;
   @ViewChild('spenderDialogContent', { static: true })
   spenderDialogContent!: TemplateRef<unknown>;
+
+  showStickyMobileHeader = false;
+  private coverObserver: IntersectionObserver | null = null;
 
   selectedJoy: Joy | null = null;
   groupCards: JoyGroup[] = [];
@@ -582,6 +588,10 @@ export class DashboardComponent implements OnChanges, OnDestroy {
     }, 0);
   }
 
+  ngAfterViewInit(): void {
+    this.startCoverObserver();
+  }
+
   ngOnChanges(changes: SimpleChanges): void {
     if (changes["joyId"]) {
       this.subscribeToJoyData();
@@ -589,6 +599,7 @@ export class DashboardComponent implements OnChanges, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.coverObserver?.disconnect();
     this.unsubscribeJoy?.();
     this.unsubscribeGroups?.();
     this.unsubscribeChecklist?.();
@@ -598,6 +609,27 @@ export class DashboardComponent implements OnChanges, OnDestroy {
     this.groupExpensesUnsubscribers.forEach((unsub) => unsub());
     this.groupExpensesUnsubscribers.clear();
     this.groupExpensesMap.clear();
+  }
+
+  private startCoverObserver(): void {
+    this.coverObserver?.disconnect();
+    this.coverObserver = null;
+
+    const el = this.mobileCoverRef?.nativeElement;
+    if (!el) return;
+
+    this.coverObserver = new IntersectionObserver(
+      (entries) => {
+        const entry = entries[0];
+        if (!entry) return;
+        this.ngZone.run(() => {
+          this.showStickyMobileHeader = !entry.isIntersecting;
+          this.cdr.detectChanges();
+        });
+      },
+      { threshold: 0 }
+    );
+    this.coverObserver.observe(el);
   }
 
   onNewGroupClick(): void {
@@ -1556,6 +1588,8 @@ export class DashboardComponent implements OnChanges, OnDestroy {
         }
 
         this.cdr.detectChanges();
+        // Attach cover observer now that DOM has been updated
+        this.startCoverObserver();
       }, remainingDelay);
     };
 
@@ -1694,8 +1728,10 @@ export class DashboardComponent implements OnChanges, OnDestroy {
   }
 
   // Returns color classes for each currency chip, and red border if negative
-  getCurrencyChipClass(currency: AppCurrency, negative: boolean = false): string {
-    const base = 'inline-flex items-center gap-1 rounded-xl px-2 py-1 text-xs font-bold backdrop-blur-md';
+  getCurrencyChipClass(currency: AppCurrency, negative: boolean = false, compact = false): string {
+    const base = compact
+      ? 'inline-flex items-center gap-0.5 rounded-lg px-1.5 py-0.5 text-[10px] font-bold'
+      : 'inline-flex items-center gap-1 rounded-xl px-2 py-1 text-xs font-bold backdrop-blur-md';
     const colorMap: Record<AppCurrency, string> = {
       USD: 'bg-sky-100 text-sky-800',
       VND: 'bg-green-100 text-green-800',

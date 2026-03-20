@@ -16,7 +16,44 @@
   </div>
 
   <ng-container *ngIf="joyId && selectedJoy as joy">
-    <header class="md:hidden pb-4">
+    <!-- Sticky mobile header — appears once the cover scrolls out of view -->
+    <div
+      class="md:hidden fixed top-0 left-0 right-0 z-50 transition-all duration-300 pointer-events-none"
+      [class.pointer-events-auto]="showStickyMobileHeader"
+      [style.transform]="showStickyMobileHeader ? 'translateY(0)' : 'translateY(-100%)'"
+      [style.opacity]="showStickyMobileHeader ? '1' : '0'"
+    >
+      <div
+        class="sticky-mobile-header-inner relative flex items-center px-3 py-2 backdrop-blur-xl bg-white/90 dark:bg-slate-900/90 border-b border-slate-200/60 dark:border-slate-800/60 shadow-sm"
+      >
+        <!-- Back button -->
+        <button
+          type="button"
+          (click)="onBackToJoysClick()"
+          class="flex-shrink-0 z-10 inline-flex h-9 w-9 items-center justify-center rounded-full text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+        >
+          <span class="material-symbols-outlined text-[20px]">arrow_back</span>
+        </button>
+
+        <!-- Joy name — absolutely centered so it doesn't shift with chip width -->
+        <h1 class="absolute inset-x-0 text-center text-sm font-bold text-slate-900 dark:text-white px-12 truncate pointer-events-none">
+          {{ selectedJoy?.joyName }}
+        </h1>
+
+        <!-- Currency chips (right side) -->
+        <div class="flex-shrink-0 flex flex-wrap gap-1 justify-end ml-auto z-10" style="max-width:160px">
+          <span
+            *ngFor="let chip of depositSummaries"
+            [ngClass]="getCurrencyChipClass(chip.currency, chip.remaining < 0, true)"
+          >
+            <span *ngIf="chip.remaining < 0" class="material-symbols-outlined text-red-500 text-[10px]">error</span>
+            {{ formatDepositAmount(chip.remaining, chip.currency) }}
+          </span>
+        </div>
+      </div>
+    </div>
+
+    <header #mobileCoverRef class="md:hidden pb-4">
       <div
         class="relative min-h-[100px] overflow-hidden rounded-[28px] shadow-sm"
       >
