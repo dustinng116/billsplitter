@@ -374,6 +374,16 @@ export class AddExpenseDialogComponent implements OnInit, OnChanges, OnDestroy {
     const input = event.target as HTMLInputElement;
 
     if (isDigit) {
+      const selectionStart = input.selectionStart;
+      const selectionEnd = input.selectionEnd;
+      if (selectionStart !== null && selectionEnd !== null) {
+        const newValue = input.value.substring(0, selectionStart) + event.key + input.value.substring(selectionEnd);
+        const decimalIndex = newValue.indexOf('.');
+        if (decimalIndex !== -1 && newValue.substring(decimalIndex + 1).length > 2) {
+          event.preventDefault();
+          return;
+        }
+      }
       return;
     }
 
