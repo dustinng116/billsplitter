@@ -18,8 +18,7 @@ import { FormsModule } from "@angular/forms";
 import { type Unsubscribe } from "firebase/database";
 import { Subscription } from "rxjs";
 import { AddExpenseDialogComponent } from "../add-expense-dialog/add-expense-dialog.component";
-import { CurrencyService } from "../../services/currency.service";
-import { AppCurrency } from "../../services/currency.service";
+import { CurrencyService, AppCurrency } from "../../services/currency.service";
 import { AvatarColorService } from "../../services/avatar-color.service";
 import { TranslatePipe } from "../../pipes/translate.pipe";
 import { JoyService } from "../../services/joy.service";
@@ -33,6 +32,7 @@ import {
   JoyCategory,
   JoyChecklistItem,
   JoyDepositEntry,
+  JoyFamilyGroup,
   JoyGroup,
   JoyGroupMember,
   JoyExpense,
@@ -91,6 +91,47 @@ interface JoyConfigForm {
   coverImage?: string;
 }
 
+interface MatrixCell {
+  amount: number;      // system currency
+  origAmount: number;  // original expense currency
+  currency: string;
+  isPaid: boolean;
+  isForeign: boolean;
+  isPayer: boolean;
+}
+
+interface MatrixRow {
+  expenseId: string;
+  groupId: string;
+  groupName: string;
+  title: string;
+  payerKey: string;
+  payerName: string;
+  totalAmount: number;
+  origAmount: number;
+  currency: string;
+  cells: Map<string, MatrixCell>;
+  allPaid: boolean;
+}
+
+interface SettlementEntry {
+  fromKey: string;
+  fromName: string;
+  toKey: string;
+  toName: string;
+  amount: number;
+}
+
+interface SettlementMatrix {
+  members: { key: string; name: string }[];
+  rows: MatrixRow[];
+  settlements: SettlementEntry[];
+  memberStats: Map<string, { name: string; totalPaid: number; totalOwed: number; totalAlreadyPaid: number }>;
+  netBalances: Map<string, number>;
+  /** Raw per-pair debts before pairwise netting. Key = "debtorKey||creditorKey" */
+  debtPairs: Map<string, number>;
+}
+
 const MOBILE_SWIPE_ACTION_WIDTH = 88;
 
 @Component({
@@ -125,6 +166,8 @@ export class DashboardComponent implements OnChanges, OnDestroy, AfterViewInit {
   @ViewChild('mobileCoverRef') mobileCoverRef?: ElementRef<HTMLElement>;
   @ViewChild('spenderDialogContent', { static: true })
   spenderDialogContent!: TemplateRef<unknown>;
+  @ViewChild('matrixDialogContent', { static: true })
+  matrixDialogContent!: TemplateRef<unknown>;
 
   showStickyMobileHeader = false;
   private coverObserver: IntersectionObserver | null = null;
@@ -163,6 +206,7 @@ export class DashboardComponent implements OnChanges, OnDestroy, AfterViewInit {
   private unsubscribeJoy: Unsubscribe | null = null;
   private unsubscribeGroups: Unsubscribe | null = null;
   private unsubscribeChecklist: Unsubscribe | null = null;
+  private unsubscribeFamilyGroups: Unsubscribe | null = null;
   private groupExpensesUnsubscribers: Map<string, Unsubscribe> = new Map();
   private groupExpensesMap: Map<string, JoyExpense[]> = new Map();
 
@@ -195,6 +239,11 @@ export class DashboardComponent implements OnChanges, OnDestroy, AfterViewInit {
   depositDialogRows: DepositDialogRow[] = [];
   isSavingDeposit = false;
   spenderDialogData: SpenderDialogData | null = null;
+  matrixData: SettlementMatrix | null = null;
+  matrixFilterKeys: string[] = [];
+  matrixPayerFilterKeys: string[] = [];
+  familyGroups: JoyFamilyGroup[] = [];
+  newFamilyGroupName = '';
   readonly supportedCurrencies: AppCurrency[];
 
   private readonly userSubscription: Subscription;
@@ -603,6 +652,7 @@ export class DashboardComponent implements OnChanges, OnDestroy, AfterViewInit {
     this.unsubscribeJoy?.();
     this.unsubscribeGroups?.();
     this.unsubscribeChecklist?.();
+    this.unsubscribeFamilyGroups?.();
     this.unsubscribeDeposits?.();
     this.userSubscription.unsubscribe();
     // cleanup expense listeners
@@ -1553,6 +1603,7 @@ export class DashboardComponent implements OnChanges, OnDestroy, AfterViewInit {
     this.unsubscribeJoy?.();
     this.unsubscribeGroups?.();
     this.unsubscribeDeposits?.();
+    this.unsubscribeFamilyGroups?.();
 
     if (!this.joyId) {
       this.lastLoadedJoyId = '';
@@ -1650,6 +1701,21 @@ export class DashboardComponent implements OnChanges, OnDestroy, AfterViewInit {
       }
     );
 
+    // Family groups subscription
+    this.unsubscribeFamilyGroups?.();
+    this.unsubscribeFamilyGroups = this.joyService.listenToJoyFamilyGroups(
+      this.joyId,
+      (groups) => {
+        this.ngZone.run(() => {
+          this.familyGroups = groups;
+          this.cdr.detectChanges();
+        });
+      },
+      (error) => {
+        console.error('Failed to sync family groups.', error);
+      }
+    );
+
     // Checklist subscription
     this.unsubscribeChecklist?.();
     this.unsubscribeChecklist = this.joyService.listenToJoyChecklist(
@@ -1725,6 +1791,409 @@ export class DashboardComponent implements OnChanges, OnDestroy, AfterViewInit {
 
       this.groupExpensesUnsubscribers.set(group.id, unsub);
     });
+  }
+
+  // ── Settlement Matrix ────────────────────────────────────────────────────
+
+  openCalculateDialog(): void {
+    if (!this.matrixDialogContent) return;
+    this.matrixData = this.computeSettlementMatrix();
+    this.matrixFilterKeys = [];
+    this.matrixPayerFilterKeys = [];
+    this.newFamilyGroupName = '';
+    const closeLabel = this.translationService.t('friends.cancel') || 'Đóng';
+    this.commonDialogService.open({
+      title: 'Tính toán',
+      icon: 'calculate',
+      content: this.matrixDialogContent,
+      bodyClass: 'p-0',
+      actions: [{ label: closeLabel, kind: 'primary', grow: true, handler: () => this.commonDialogService.close() }],
+      onClose: () => { this.matrixData = null; this.matrixFilterKeys = []; this.matrixPayerFilterKeys = []; this.cdr.detectChanges(); },
+    });
+  }
+
+  toggleMatrixFilter(key: string): void {
+    const idx = this.matrixFilterKeys.indexOf(key);
+    if (idx >= 0) {
+      this.matrixFilterKeys.splice(idx, 1);
+    } else {
+      this.matrixFilterKeys.push(key);
+    }
+    this.cdr.detectChanges();
+  }
+
+  toggleMatrixPayerFilter(key: string): void {
+    const idx = this.matrixPayerFilterKeys.indexOf(key);
+    if (idx >= 0) {
+      this.matrixPayerFilterKeys.splice(idx, 1);
+    } else {
+      this.matrixPayerFilterKeys.push(key);
+    }
+    this.cdr.detectChanges();
+  }
+
+  getMatrixPayerChipClass(key: string): string {
+    const base = 'inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-bold transition-colors border';
+    if (this.matrixPayerFilterKeys.length === 0 || this.matrixPayerFilterKeys.includes(key)) {
+      return `${base} bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-700`;
+    }
+    return `${base} bg-white dark:bg-slate-800 text-slate-400 dark:text-slate-500 border-slate-200 dark:border-slate-700`;
+  }
+
+  get matrixPayerList(): { key: string; name: string }[] {
+    if (!this.matrixData) return [];
+    const seen = new Set<string>();
+    const result: { key: string; name: string }[] = [];
+    for (const row of this.matrixData.rows) {
+      if (!seen.has(row.payerKey)) {
+        seen.add(row.payerKey);
+        result.push({ key: row.payerKey, name: row.payerName });
+      }
+    }
+    return result;
+  }
+
+  getMatrixMemberChipClass(key: string): string {
+    const base = 'inline-flex items-center rounded-full px-3 py-1 text-xs font-bold transition-colors border';
+    if (this.matrixFilterKeys.length === 0 || this.matrixFilterKeys.includes(key)) {
+      return `${base} bg-primary/10 text-primary border-primary/30`;
+    }
+    return `${base} bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700`;
+  }
+
+  getMatrixCell(row: MatrixRow, memberKey: string): MatrixCell | null {
+    return row.cells.get(memberKey) ?? null;
+  }
+
+  getMatrixMemberStats(key: string): { totalPaid: number; totalOwed: number; totalAlreadyPaid: number; totalStillOwed: number } {
+    const s = this.matrixData?.memberStats.get(key);
+    if (!s) return { totalPaid: 0, totalOwed: 0, totalAlreadyPaid: 0, totalStillOwed: 0 };
+    return { totalPaid: s.totalPaid, totalOwed: s.totalOwed, totalAlreadyPaid: s.totalAlreadyPaid, totalStillOwed: s.totalOwed - s.totalAlreadyPaid };
+  }
+
+  getMatrixMemberName(key: string): string {
+    return this.matrixData?.members.find(m => m.key === key)?.name ?? key;
+  }
+
+  get filteredMatrixRows(): MatrixRow[] {
+    if (!this.matrixData) return [];
+    let rows = this.matrixData.rows;
+    if (this.matrixPayerFilterKeys.length) {
+      rows = rows.filter(row => this.matrixPayerFilterKeys.includes(row.payerKey));
+    }
+    if (this.matrixFilterKeys.length) {
+      rows = rows.filter(row =>
+        this.matrixFilterKeys.includes(row.payerKey) ||
+        this.matrixFilterKeys.some(k => row.cells.has(k))
+      );
+    }
+    return rows;
+  }
+
+  private computeSettlementMatrix(): SettlementMatrix {
+    // Gather all unique members across groups
+    const memberMap = new Map<string, string>(); // key → display name
+    for (const group of this.groupCards) {
+      for (const m of group.members ?? []) {
+        const key = this.getMemberKey(m);
+        if (!memberMap.has(key)) memberMap.set(key, m.name);
+      }
+    }
+    // Sort members: family-group members first (grouped by family), then individuals
+    const baseMembers = Array.from(memberMap.entries()).map(([key, name]) => ({ key, name }));
+    const orderedMembers: typeof baseMembers = [];
+    const usedMemberKeys = new Set<string>();
+    for (const fg of this.familyGroups) {
+      for (const mk of fg.memberKeys) {
+        const found = baseMembers.find(m => m.key === mk);
+        if (found && !usedMemberKeys.has(found.key)) {
+          orderedMembers.push(found);
+          usedMemberKeys.add(found.key);
+        }
+      }
+    }
+    for (const m of baseMembers) {
+      if (!usedMemberKeys.has(m.key)) orderedMembers.push(m);
+    }
+    const members = orderedMembers;
+    const systemCurrency = this.currencyService.currentCurrency();
+
+    // Build one row per expense
+    const rows: MatrixRow[] = [];
+    for (const [groupId, expenses] of this.groupExpensesMap.entries()) {
+      const group = this.groupCards.find(g => g.id === groupId);
+      const groupName = group?.name ?? '';
+      for (const exp of expenses) {
+        const payerRaw = (exp.paidBy || '').trim();
+        if (!payerRaw || payerRaw.startsWith('DEPOSIT:')) continue;
+        const payerKey = this.resolvePayerKeyFromMap(payerRaw, memberMap);
+        const payerName = this.resolveSpenderName(payerRaw);
+        const srcCurrency = (exp.currency as AppCurrency) ?? systemCurrency;
+        const origTotal = exp.originalAmount ?? exp.amount;
+        const isForeign = srcCurrency !== systemCurrency;
+        const sysTotal = typeof exp.amount === 'number' && exp.amount > 0 ? exp.amount : 0;
+
+        const cells = new Map<string, MatrixCell>();
+        let allPaid = true;
+        for (const em of exp.members ?? []) {
+          // Resolve to canonical group-member key so it matches payerKey
+          const emKey = this.resolveMemberToCanonicalKey(em, memberMap);
+          const persistKey = `${groupId}__${exp.id}__${emKey}`;
+          const isPaid = this.expMemberPaidState.get(persistKey) ?? !!(em.isPaid);
+          const shareSystem =
+            typeof em.shareAmount === 'number' && em.shareAmount > 0
+              ? em.shareAmount
+              : this.currencyService.convertUsingRateHeuristic(
+                  origTotal / Math.max(exp.members.length, 1),
+                  srcCurrency
+                );
+          const ratio = sysTotal > 0 ? shareSystem / sysTotal : 1 / Math.max(exp.members.length, 1);
+          const origShare = origTotal * ratio;
+          const isPayer = emKey === payerKey;
+          if (!isPayer && !isPaid) allPaid = false;
+          cells.set(emKey, { amount: shareSystem, origAmount: origShare, currency: srcCurrency, isPaid: isPayer ? true : isPaid, isForeign, isPayer });
+        }
+
+        rows.push({ expenseId: exp.id, groupId, groupName, title: exp.title, payerKey, payerName, totalAmount: sysTotal, origAmount: origTotal, currency: srcCurrency, cells, allPaid });
+      }
+    }
+
+    // Per-member statistics
+    const memberStats = new Map<string, { name: string; totalPaid: number; totalOwed: number; totalAlreadyPaid: number }>();
+    for (const [key, name] of memberMap) {
+      let totalPaid = 0;
+      let totalOwed = 0;
+      let totalAlreadyPaid = 0;
+      for (const row of rows) {
+        if (row.payerKey === key) {
+          for (const [ck, cell] of row.cells) {
+            if (ck !== key) totalPaid += cell.amount;
+          }
+        }
+        const cell = row.cells.get(key);
+        if (cell && !cell.isPayer) {
+          totalOwed += cell.amount;
+          if (cell.isPaid) totalAlreadyPaid += cell.amount;
+        }
+      }
+      memberStats.set(key, { name, totalPaid, totalOwed, totalAlreadyPaid });
+    }
+
+    // Build direct pairwise debts: for every unpaid cell record debtor → payer.
+    // This preserves WHO each person actually owes so settlements are accurate.
+    const rawDebt = new Map<string, number>(); // `${debtorKey}||${payerKey}` → amount
+    // Also keep net balances (per-member aggregated) for stats display.
+    const net = new Map<string, number>();
+    for (const [key] of memberMap) net.set(key, 0);
+    for (const row of rows) {
+      if (!memberMap.has(row.payerKey)) continue;
+      for (const [ck, cell] of row.cells) {
+        if (cell.isPayer || cell.isPaid) continue;
+        if (!memberMap.has(ck)) continue;
+        const pairKey = `${ck}||${row.payerKey}`;
+        rawDebt.set(pairKey, (rawDebt.get(pairKey) ?? 0) + cell.amount);
+        net.set(row.payerKey, net.get(row.payerKey)! + cell.amount);
+        net.set(ck, net.get(ck)! - cell.amount);
+      }
+    }
+
+    // Pairwise netting: if A→B and B→A both exist, net them off
+    const settlements: SettlementEntry[] = [];
+    const processed = new Set<string>();
+    for (const [pairKey, amount] of rawDebt) {
+      if (processed.has(pairKey)) continue;
+      const [fromKey, toKey] = pairKey.split('||');
+      const reverseKey = `${toKey}||${fromKey}`;
+      const reverseAmt = rawDebt.get(reverseKey) ?? 0;
+      processed.add(pairKey);
+      processed.add(reverseKey);
+      const netAmt = amount - reverseAmt;
+      if (netAmt > 0.5) {
+        settlements.push({ fromKey, fromName: memberMap.get(fromKey) ?? fromKey, toKey, toName: memberMap.get(toKey) ?? toKey, amount: netAmt });
+      } else if (netAmt < -0.5) {
+        settlements.push({ fromKey: toKey, fromName: memberMap.get(toKey) ?? toKey, toKey: fromKey, toName: memberMap.get(fromKey) ?? fromKey, amount: -netAmt });
+      }
+    }
+
+    return { members, rows, settlements, memberStats, netBalances: new Map(net), debtPairs: rawDebt };
+  }
+
+  /** Resolves an expense member to its canonical group-member key (email-first),
+   *  falling back to name-match against the memberMap so it stays consistent with payerKey. */
+  private resolveMemberToCanonicalKey(em: JoyGroupMember, memberMap: Map<string, string>): string {
+    const directKey = this.getMemberKey(em);
+    if (memberMap.has(directKey)) return directKey;
+    const emEmail = (em.email || '').trim().toLowerCase();
+    const emName = (em.name || '').trim().toLowerCase();
+    for (const [key, name] of memberMap) {
+      if (emEmail && key === emEmail) return key;
+      if (emName && name.trim().toLowerCase() === emName) return key;
+    }
+    return directKey;
+  }
+
+  private resolvePayerKeyFromMap(payerRaw: string, memberMap: Map<string, string>): string {
+    const normalized = payerRaw.trim().toLowerCase();
+    if (memberMap.has(normalized)) return normalized;
+    for (const [key, name] of memberMap) {
+      if (name.trim().toLowerCase() === normalized) return key;
+    }
+    return normalized;
+  }
+
+  createFamilyGroup(): void {
+    const name = this.newFamilyGroupName.trim();
+    if (!name) return;
+    const updated = [...this.familyGroups, { id: Date.now().toString(), name, memberKeys: [] }];
+    this.familyGroups = updated;
+    this.newFamilyGroupName = '';
+    void this.joyService.saveJoyFamilyGroups(this.joyId, updated).catch(err => console.error('Failed to save family groups', err));
+    this.cdr.detectChanges();
+  }
+
+  removeFamilyGroup(id: string): void {
+    const updated = this.familyGroups.filter(g => g.id !== id);
+    this.familyGroups = updated;
+    void this.joyService.saveJoyFamilyGroups(this.joyId, updated).catch(err => console.error('Failed to save family groups', err));
+    this.cdr.detectChanges();
+  }
+
+  addMemberToFamilyGroup(groupId: string, memberKey: string): void {
+    const updated = this.familyGroups.map(g => ({
+      ...g,
+      memberKeys: g.id === groupId
+        ? [...g.memberKeys.filter(k => k !== memberKey), memberKey]
+        : g.memberKeys.filter(k => k !== memberKey),
+    }));
+    this.familyGroups = updated;
+    void this.joyService.saveJoyFamilyGroups(this.joyId, updated).catch(err => console.error('Failed to save family groups', err));
+    this.cdr.detectChanges();
+  }
+
+  removeMemberFromFamilyGroup(groupId: string, memberKey: string): void {
+    const updated = this.familyGroups.map(g =>
+      g.id === groupId ? { ...g, memberKeys: g.memberKeys.filter(k => k !== memberKey) } : g
+    );
+    this.familyGroups = updated;
+    void this.joyService.saveJoyFamilyGroups(this.joyId, updated).catch(err => console.error('Failed to save family groups', err));
+    this.cdr.detectChanges();
+  }
+
+  getMemberFamilyGroupId(memberKey: string): string | null {
+    return this.familyGroups.find(g => g.memberKeys.includes(memberKey))?.id ?? null;
+  }
+
+  getFamilyGroupHeaderClass(idx: number): string {
+    const p = [
+      'bg-violet-100 dark:bg-violet-900/20 border-violet-200 dark:border-violet-700 text-violet-900 dark:text-violet-100',
+      'bg-amber-100 dark:bg-amber-900/20 border-amber-200 dark:border-amber-700 text-amber-900 dark:text-amber-100',
+      'bg-cyan-100 dark:bg-cyan-900/20 border-cyan-200 dark:border-cyan-700 text-cyan-900 dark:text-cyan-100',
+      'bg-rose-100 dark:bg-rose-900/20 border-rose-200 dark:border-rose-700 text-rose-900 dark:text-rose-100',
+      'bg-green-100 dark:bg-green-900/20 border-green-200 dark:border-green-700 text-green-900 dark:text-green-100',
+    ];
+    return p[idx % p.length];
+  }
+
+  getFamilyGroupChipClass(idx: number): string {
+    const p = [
+      'bg-violet-200 dark:bg-violet-800 text-violet-900 dark:text-violet-100',
+      'bg-amber-200 dark:bg-amber-800 text-amber-900 dark:text-amber-100',
+      'bg-cyan-200 dark:bg-cyan-800 text-cyan-900 dark:text-cyan-100',
+      'bg-rose-200 dark:bg-rose-800 text-rose-900 dark:text-rose-100',
+      'bg-green-200 dark:bg-green-800 text-green-900 dark:text-green-100',
+    ];
+    return p[idx % p.length];
+  }
+
+  getFamilyGroupIndex(groupId: string): number {
+    return this.familyGroups.findIndex(g => g.id === groupId);
+  }
+
+  get unassignedMatrixMembers(): Array<{ key: string; name: string }> {
+    if (!this.matrixData) return [];
+    const assignedKeys = new Set(this.familyGroups.flatMap(g => g.memberKeys));
+    return this.matrixData.members.filter(m => !assignedKeys.has(m.key));
+  }
+
+  /** Column grouping info for the matrix header row — one entry per contiguous group/individual. */
+  get matrixColumnGroups(): { name: string; colspan: number; colorIndex: number; isFamilyGroup: boolean }[] {
+    if (!this.matrixData) return [];
+    const result: { name: string; colspan: number; colorIndex: number; isFamilyGroup: boolean }[] = [];
+    const members = this.matrixData.members;
+    let i = 0;
+    while (i < members.length) {
+      const fgIndex = this.familyGroups.findIndex(g => g.memberKeys.includes(members[i].key));
+      if (fgIndex >= 0) {
+        const fg = this.familyGroups[fgIndex];
+        let count = 0;
+        while (i + count < members.length && fg.memberKeys.includes(members[i + count].key)) count++;
+        result.push({ name: fg.name, colspan: count, colorIndex: fgIndex, isFamilyGroup: true });
+        i += count;
+      } else {
+        result.push({ name: members[i].name, colspan: 1, colorIndex: -1, isFamilyGroup: false });
+        i++;
+      }
+    }
+    return result;
+  }
+
+  get familyAwareSettlements(): SettlementEntry[] {
+    if (!this.matrixData) return [];
+    const memberMap = new Map(this.matrixData.members.map(m => [m.key, m.name]));
+
+    // Map each individual debt pair to the family-group level.
+    // Intra-family debts (same effective key on both sides) are dropped.
+    const familyDebt = new Map<string, number>(); // `${eFromKey}||${eToKey}` → amount
+    for (const [pairKey, amount] of this.matrixData.debtPairs) {
+      const [fromKey, toKey] = pairKey.split('||');
+      const fgFrom = this.familyGroups.find(g => g.memberKeys.includes(fromKey));
+      const fgTo   = this.familyGroups.find(g => g.memberKeys.includes(toKey));
+      const eFrom  = fgFrom ? `family:${fgFrom.id}` : fromKey;
+      const eTo    = fgTo   ? `family:${fgTo.id}`   : toKey;
+      if (eFrom === eTo) continue; // intra-family: cancel out
+      const k = `${eFrom}||${eTo}`;
+      familyDebt.set(k, (familyDebt.get(k) ?? 0) + amount);
+    }
+
+    const getFamilyName = (eKey: string): string => {
+      if (eKey.startsWith('family:')) {
+        return this.familyGroups.find(g => g.id === eKey.slice(7))?.name ?? eKey;
+      }
+      return memberMap.get(eKey) ?? eKey;
+    };
+
+    // Pairwise netting at family level
+    const result: SettlementEntry[] = [];
+    const processed = new Set<string>();
+    for (const [pairKey, amount] of familyDebt) {
+      if (processed.has(pairKey)) continue;
+      const [fromKey, toKey] = pairKey.split('||');
+      const reverseKey = `${toKey}||${fromKey}`;
+      const reverseAmt = familyDebt.get(reverseKey) ?? 0;
+      processed.add(pairKey);
+      processed.add(reverseKey);
+      const netAmt = amount - reverseAmt;
+      if (netAmt > 0.5) {
+        result.push({ fromKey, fromName: getFamilyName(fromKey), toKey, toName: getFamilyName(toKey), amount: netAmt });
+      } else if (netAmt < -0.5) {
+        result.push({ fromKey: toKey, fromName: getFamilyName(toKey), toKey: fromKey, toName: getFamilyName(fromKey), amount: -netAmt });
+      }
+    }
+    return result;
+  }
+
+  isSettlementFamilyGroup(key: string): boolean {
+    return key.startsWith('family:');
+  }
+
+  isSettlementKeySelectedInFilter(key: string): boolean {
+    if (!this.matrixFilterKeys.length) return true;
+    if (key.startsWith('family:')) {
+      const gId = key.slice(7);
+      const g = this.familyGroups.find(fg => fg.id === gId);
+      return !!g?.memberKeys.some(k => this.matrixFilterKeys.includes(k));
+    }
+    return this.matrixFilterKeys.includes(key);
   }
 
   // Returns color classes for each currency chip, and red border if negative

@@ -91,6 +91,12 @@ export interface JoyDepositEntry {
   createdAt: string;
 }
 
+export interface JoyFamilyGroup {
+  id: string;
+  name: string;
+  memberKeys: string[];
+}
+
 export interface CategoryStyle {
   bgColor: string;
   textColor: string;

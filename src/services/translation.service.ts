@@ -288,7 +288,23 @@ const EN_DICTIONARY: TranslationDictionary = {
   'deposit.cancel': 'Cancel',
   'deposit.title': 'Add Deposit',
   'deposit.selectMember': 'Select member',
-  'deposit.enterAmount': 'Enter amount'
+  'deposit.enterAmount': 'Enter amount',
+
+  'matrix.familyGroups': 'Family groups',
+  'matrix.groupNamePlaceholder': 'Group name...',
+  'matrix.addGroup': 'Add',
+  'matrix.individuals': 'Individuals:',
+  'matrix.familyGroupHint': 'Group members together for family-based calculations. Debts within the same group will be merged.',
+  'matrix.filterByMember': 'Select a person to view details:',
+  'matrix.paidForOthers': 'Paid for others:',
+  'matrix.alreadyPaidBack': 'Already paid back:',
+  'matrix.stillOwes': 'Still owes:',
+  'matrix.netBalance': 'Net balance:',
+  'matrix.filterByPayer': 'Filter by payer:',
+  'matrix.expenseColumn': 'Expense',
+  'matrix.noExpenses': 'No expenses yet.',
+  'matrix.settlementTitle': 'Settlement Plan (simplified)',
+  'matrix.allSettled': 'All settled!'
 };
 
 const VN_DICTIONARY: TranslationDictionary = {
@@ -572,7 +588,23 @@ const VN_DICTIONARY: TranslationDictionary = {
   'deposit.cancel': 'Huỷ',
   'deposit.title': 'Thêm Deposit',
   'deposit.selectMember': 'Chọn thành viên',
-  'deposit.enterAmount': 'Nhập số tiền'
+  'deposit.enterAmount': 'Nhập số tiền',
+
+  'matrix.familyGroups': 'Nhóm gia đình',
+  'matrix.groupNamePlaceholder': 'Tên nhóm...',
+  'matrix.addGroup': 'Thêm',
+  'matrix.individuals': 'Cá nhân:',
+  'matrix.familyGroupHint': 'Nhóm thành viên lại để tính toán theo nhóm gia đình. Các khoản nợ sẽ được gộp trong nhóm.',
+  'matrix.filterByMember': 'Chọn người để xem chi tiết:',
+  'matrix.paidForOthers': 'Đã trả hộ:',
+  'matrix.alreadyPaidBack': 'Đã trả nợ:',
+  'matrix.stillOwes': 'Còn nợ:',
+  'matrix.netBalance': 'Chênh lệch:',
+  'matrix.filterByPayer': 'Lọc theo người trả:',
+  'matrix.expenseColumn': 'Chi phí',
+  'matrix.noExpenses': 'Chưa có chi phí nào.',
+  'matrix.settlementTitle': 'Kế hoạch thanh toán (đơn giản hóa)',
+  'matrix.allSettled': 'Tất cả đã thanh toán!'
 };
 
 @Injectable({ providedIn: 'root' })

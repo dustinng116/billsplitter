@@ -173,23 +173,39 @@ export class AddExpenseDialogComponent implements OnInit, OnChanges, OnDestroy {
   openDetails(expense: JoyExpense): void {
     this.dialogMode = 'details';
     this.isPaidByMenuOpen = false;
+    const expCurrency = (expense.currency as AppCurrency | undefined) ?? this.currencyService.currentCurrency();
+    const isForeignCurrency = expCurrency !== this.currencyService.currentCurrency();
+    // Rate: system units per original unit (e.g. 21000 VND per 1 SGD).
+    // Used to reverse-convert customAmount (stored in system currency) back to original.
+    const convRate = expense.conversionRate
+      ?? (expense.originalAmount && expense.originalAmount > 0 && expense.amount > 0
+        ? expense.amount / expense.originalAmount
+        : 1);
     this.expenseForm = {
       title: expense.title,
       amount: expense.originalAmount ?? expense.amount,
-      currency: (expense.currency as AppCurrency | undefined) ?? this.currencyService.currentCurrency(),
+      currency: expCurrency,
       date: expense.date,
       paidBy: expense.paidBy,
       splitType: expense.splitType,
-      members: expense.members.map((member) => ({
-        id: member.id,
-        name: member.name,
-        avatar: member.avatar,
-        email: member.email,
-        selected: true,
-        amount: member.shareAmount ?? 0,
-        percentage: member.percentage ?? 0,
-        customAmount: member.customAmount ?? member.shareAmount ?? 0
-      }))
+      members: expense.members.map((member) => {
+        const rawCustom = member.customAmount ?? member.shareAmount ?? 0;
+        // For custom split with foreign currency, customAmount was saved in system currency.
+        // Divide by rate to recover the original-currency amount for display.
+        const customAmount = expense.splitType === 'custom' && isForeignCurrency && convRate > 0
+          ? rawCustom / convRate
+          : rawCustom;
+        return {
+          id: member.id,
+          name: member.name,
+          avatar: member.avatar,
+          email: member.email,
+          selected: true,
+          amount: member.shareAmount ?? 0,
+          percentage: member.percentage ?? 0,
+          customAmount,
+        };
+      })
     };
     this.calculateSplit();
     this.commonDialogService.open({

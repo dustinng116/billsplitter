@@ -2,7 +2,7 @@ import { Injectable } from '@angular/core';
 import { getAuth } from 'firebase/auth';
 import { get, onValue, push, ref, remove, set, update, type Unsubscribe } from 'firebase/database';
 import { db } from '../firebase';
-import { CategoryStyle, Joy, JoyCategory, JoyChecklistItem, JoyCreator, JoyDepositEntry, JoyExpense, JoyGroup, JoyStatus, StatusStyle } from '../types/joy.interface';
+import { CategoryStyle, Joy, JoyCategory, JoyChecklistItem, JoyCreator, JoyDepositEntry, JoyExpense, JoyFamilyGroup, JoyGroup, JoyStatus, StatusStyle } from '../types/joy.interface';
 import { DataScopeService } from './data-scope.service';
 import { GuestStorageService } from './guest-storage.service';
 import { UserDirectoryService } from './user-directory.service';
@@ -1303,5 +1303,99 @@ export class JoyService {
       Accommodation: { icon: 'hotel', iconBg: 'bg-indigo-100 dark:bg-indigo-900/30', iconColor: 'text-indigo-600 dark:text-indigo-400' }
     };
     return map[category] ?? { icon: 'auto_awesome', iconBg: 'bg-slate-100 dark:bg-slate-800', iconColor: 'text-slate-600 dark:text-slate-400' };
+  }
+
+  // ── Family Groups ──────────────────────────────────────────────────────
+
+  private parseFamilyGroups(data: Record<string, unknown>): JoyFamilyGroup[] {
+    return Object.entries(data ?? {}).map(([id, v]) => {
+      const val = v as Record<string, unknown>;
+      const mk = val['memberKeys'] as Record<string, string> | undefined;
+      return {
+        id,
+        name: typeof val['name'] === 'string' ? val['name'] : '',
+        memberKeys: Object.values(mk ?? {}).filter((k): k is string => typeof k === 'string'),
+      };
+    });
+  }
+
+  listenToJoyFamilyGroups(
+    joyId: string,
+    onChanged: (groups: JoyFamilyGroup[]) => void,
+    onError: (error: unknown) => void
+  ): Unsubscribe {
+    if (this.dataScopeService.isGuest()) {
+      const emitGroups = () => {
+        const joys = this.readGuestJoysRecord();
+        const fgData = (joys[joyId]?.familyGroups ?? {}) as Record<string, unknown>;
+        onChanged(this.parseFamilyGroups(fgData));
+      };
+      void this.guestStorageService.fakeApiDelay().then(emitGroups).catch(onError);
+      const unsubGuest = this.guestStorageService.subscribeKey(this.guestJoysKey, emitGroups);
+      return () => unsubGuest();
+    }
+
+    let unsubscribeOwner: Unsubscribe | null = null;
+    let unsubscribeActive: Unsubscribe | null = null;
+    let disposed = false;
+    let activeOwnerUid: string | null = null;
+
+    unsubscribeOwner = this.listenToJoyOwnerUid(
+      joyId,
+      (ownerUid) => {
+        if (disposed) return;
+        // Only re-subscribe if the ownerUid actually changed.
+        // Skipping re-subscription avoids the race where writing to
+        // familyGroups triggers the parent joy onValue, which tears
+        // down and re-creates the familyGroups listener before the
+        // write's local echo has been applied to the cache.
+        if (ownerUid === activeOwnerUid && unsubscribeActive) return;
+        activeOwnerUid = ownerUid;
+        unsubscribeActive?.();
+        unsubscribeActive = null;
+        if (!ownerUid) { onChanged([]); return; }
+        unsubscribeActive = onValue(
+          ref(db, `users/${ownerUid}/joys/${joyId}/familyGroups`),
+          (snapshot) => {
+            if (!snapshot.exists()) { onChanged([]); return; }
+            onChanged(this.parseFamilyGroups(snapshot.val() as Record<string, unknown>));
+          },
+          onError
+        );
+      },
+      onError
+    );
+
+    return () => {
+      disposed = true;
+      unsubscribeOwner?.();
+      unsubscribeActive?.();
+    };
+  }
+
+  async saveJoyFamilyGroups(joyId: string, groups: JoyFamilyGroup[]): Promise<void> {
+    const toPayload = (g: JoyFamilyGroup): { name: string; memberKeys: Record<string, string> } => {
+      const memberKeys: Record<string, string> = {};
+      g.memberKeys.forEach((k, i) => { memberKeys[i] = k; });
+      return { name: g.name, memberKeys };
+    };
+
+    if (this.dataScopeService.isGuest()) {
+      await this.guestStorageService.fakeApiDelay();
+      const joys = this.readGuestJoysRecord();
+      const joyData = joys[joyId] ?? {};
+      const payload: Record<string, { name: string; memberKeys: Record<string, string> }> = {};
+      for (const g of groups) payload[g.id] = toPayload(g);
+      joyData['familyGroups'] = payload;
+      joys[joyId] = joyData;
+      this.writeGuestJoysRecord(joys);
+      return;
+    }
+
+    const ownerUid = await this.resolveJoyOwnerUid(joyId);
+    if (!ownerUid) throw new Error('Joy not found');
+    const payload: Record<string, { name: string; memberKeys: Record<string, string> }> = {};
+    for (const g of groups) payload[g.id] = toPayload(g);
+    await set(ref(db, `users/${ownerUid}/joys/${joyId}/familyGroups`), Object.keys(payload).length ? payload : null);
   }
 }
